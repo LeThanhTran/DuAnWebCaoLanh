@@ -1,0 +1,103 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using WardWebsite.API.Data;
+using WardWebsite.API.Models;
+
+namespace WardWebsite.API.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class ContactMessagesController : ControllerBase
+    {
+        private readonly AppDbContext _context;
+
+        public ContactMessagesController(AppDbContext context)
+        {
+            _context = context;
+        }
+
+        [HttpPost]
+        [AllowAnonymous]
+        public async Task<IActionResult> Create([FromBody] CreateContactMessageDto dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Name) ||
+                string.IsNullOrWhiteSpace(dto.Email) ||
+                string.IsNullOrWhiteSpace(dto.Message))
+            {
+                return BadRequest(new { success = false, message = "Vui lòng điền đầy đủ thông tin bắt buộc" });
+            }
+
+            var entity = new ContactMessage
+            {
+                Name = dto.Name.Trim(),
+                Email = dto.Email.Trim(),
+                Phone = dto.Phone?.Trim() ?? string.Empty,
+                Message = dto.Message.Trim(),
+                CreatedAt = DateTime.UtcNow,
+                IsHandled = false
+            };
+
+            _context.ContactMessages.Add(entity);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { success = true, message = "Đã ghi nhận liên hệ", data = new { entity.Id, entity.CreatedAt } });
+        }
+
+        [HttpGet]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAll()
+        {
+            var items = await _context.ContactMessages
+                .OrderByDescending(x => x.CreatedAt)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Name,
+                    x.Email,
+                    x.Phone,
+                    x.Message,
+                    x.CreatedAt,
+                    x.IsHandled
+                })
+                .ToListAsync();
+
+            return Ok(new { success = true, data = items });
+        }
+
+        [HttpPut("{id}/handled")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> MarkHandled(int id)
+        {
+            var item = await _context.ContactMessages.FindAsync(id);
+            if (item == null)
+            {
+                return NotFound(new { success = false, message = "Không tìm thấy liên hệ" });
+            }
+
+            item.IsHandled = true;
+            await _context.SaveChangesAsync();
+
+            _context.AdminActionLogs.Add(new AdminActionLog
+            {
+                AdminUsername = User?.Identity?.Name ?? "Unknown",
+                Action = "Đánh dấu liên hệ đã xử lý",
+                TargetType = "ContactMessage",
+                TargetId = item.Id,
+                Details = $"Đánh dấu xử lý liên hệ của {item.Name}",
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+
+            return Ok(new { success = true, message = "Đã đánh dấu đã xử lý" });
+        }
+    }
+
+    public class CreateContactMessageDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string? Phone { get; set; }
+        public string Message { get; set; } = string.Empty;
+    }
+}

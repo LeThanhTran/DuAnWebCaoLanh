@@ -1,0 +1,24 @@
+# .NET build artifacts
+**/bin/
+**/obj/
+
+# Node.js dependencies and build output
+**/node_modules/
+**/dist/
+
+# IDE/editor
+.vs/
+.vscode/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# User-specific files
+*.user
+*.suo
+
+# Environment-specific settings
+**/appsettings.Development.json
+**/.env
+**/.env.*
