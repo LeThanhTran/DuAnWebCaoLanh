@@ -1987,22 +1987,3 @@ body {
     padding: 0.72rem;
   }
 }
-
-.article-content img {
-  display: block;
-  width: auto;
-  max-width: min(100%, 760px);
-  max-height: 520px;
-  margin: 1rem auto;
-  object-fit: contain;
-  border-radius: 0.75rem;
-}
-
-.article-content figure {
-  max-width: min(100%, 760px);
-  margin: 1rem auto;
-}
-
-.article-content figure img {
-  margin: 0 auto;
-}

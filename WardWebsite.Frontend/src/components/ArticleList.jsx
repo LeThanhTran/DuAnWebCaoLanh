@@ -95,7 +95,40 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
     categoryFilter !== 'ALL' ||
     (canModerateArticle && statusFilter !== 'ALL')
 
-  const displayArticles = useMemo(() => articles, [articles])
+  const toSearchable = (value) => {
+    return String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+  }
+
+  const selectedCategoryName = useMemo(() => {
+    if (categoryFilter === 'ALL') return ''
+    const selected = categories.find((cat) => String(cat.id) === String(categoryFilter))
+    return selected?.name || ''
+  }, [categories, categoryFilter])
+
+  const displayArticles = useMemo(() => {
+    const normalizedTerm = toSearchable(searchTerm)
+    const normalizedCategory = toSearchable(selectedCategoryName)
+
+    return articles.filter((article) => {
+      const title = toSearchable(article.title)
+      const content = toSearchable(article.content)
+      const category = toSearchable(article.category)
+
+      const matchSearch =
+        !normalizedTerm ||
+        title.includes(normalizedTerm) ||
+        content.includes(normalizedTerm) ||
+        category.includes(normalizedTerm)
+
+      const matchCategory = categoryFilter === 'ALL' || category === normalizedCategory
+      const matchStatus = !canModerateArticle || statusFilter === 'ALL' || article.status === statusFilter
+
+      return matchSearch && matchCategory && matchStatus
+    })
+  }, [articles, searchTerm, selectedCategoryName, categoryFilter, canModerateArticle, statusFilter])
 
   const featuredShowcase = useMemo(() => {
     if (canModerateArticle || featuredArticles.length === 0) {
@@ -104,14 +137,13 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
 
     return featuredArticles
       .map((article, index) => {
-        const content = article.content || ''
-        const images = extractImageSources(content)
-        const summary = String(article.summary || '').trim() || toPlainText(content)
+        const images = extractImageSources(article.content)
+        const summary = toPlainText(article.content)
 
         return {
           ...article,
           rank: index + 1,
-          image: article.thumbnailUrl || images[0] || '',
+          image: images[0] || '',
           summary: summary.length > 180 ? `${summary.slice(0, 177)}...` : summary,
           viewCount: Number(article.viewCount || 0),
           commentCount: Number(article.commentCount || 0),
@@ -214,16 +246,18 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
       setLoading(true)
       setError('')
       const categoryId = categoryFilter === 'ALL' ? null : Number(categoryFilter)
+      const requestPage = filtersActive ? 1 : page
+      const requestPageSize = filtersActive ? 100 : pageSize
 
-      const data = await getArticles(page, pageSize, {
+      const data = await getArticles(requestPage, requestPageSize, {
         search: searchTerm,
         categoryId,
         status: canModerateArticle && statusFilter !== 'ALL' ? statusFilter : null,
         includeUnpublished: canModerateArticle
       })
 
-      setArticles(Array.isArray(data.data) ? data.data : [])
-      setTotal(Number(data.total || 0))
+      setArticles(data.data || [])
+      setTotal(filtersActive ? (data.data?.length || 0) : data.total)
     } catch (err) {
       setError('Không tải được danh sách tin tức. Vui lòng kiểm tra backend đang chạy.')
     } finally {
@@ -320,20 +354,20 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
   }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  const rowOffset = (page - 1) * pageSize
+  const rowOffset = filtersActive ? 0 : (page - 1) * pageSize
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: 'info' })} />
-      <h2 className="text-2xl md:text-[1.75rem] font-bold mb-4 text-gray-800">Danh sách bài viết</h2>
+      <h2 className="text-2xl font-bold mb-4 text-gray-800">Danh sách bài viết</h2>
 
-      <form onSubmit={handleSearchSubmit} className="mb-5 flex flex-wrap items-stretch gap-2 md:gap-3">
+      <form onSubmit={handleSearchSubmit} className="mb-4 grid grid-cols-1 lg:grid-cols-12 gap-2">
         <input
           type="text"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Tìm theo tiêu đề hoặc nội dung..."
-          className="h-[42px] w-full min-w-[240px] flex-[2_1_320px] border border-gray-300 rounded-lg px-3 py-2 text-[15px] leading-6"
+          className={canModerateArticle ? 'lg:col-span-5 border border-gray-300 rounded-lg px-3 py-2' : 'lg:col-span-6 border border-gray-300 rounded-lg px-3 py-2'}
         />
 
         <select
@@ -342,7 +376,7 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
             setCategoryFilter(e.target.value)
             setPage(1)
           }}
-          className="h-[42px] w-full min-w-[220px] flex-[1_1_220px] border border-gray-300 rounded-lg bg-white px-3 py-2 pr-10 text-[15px] leading-6"
+          className="lg:col-span-3 border border-gray-300 rounded-lg px-3 py-2 bg-white"
         >
           <option value="ALL">Tất cả danh mục</option>
           {categories.map((cat) => (
@@ -357,7 +391,7 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
               setStatusFilter(e.target.value)
               setPage(1)
             }}
-            className="h-[42px] w-full min-w-[220px] flex-[1_1_220px] border border-gray-300 rounded-lg bg-white px-3 py-2 pr-10 text-[15px] leading-6"
+            className="lg:col-span-2 border border-gray-300 rounded-lg px-3 py-2 bg-white"
           >
             {statusOptions.map((item) => (
               <option key={item.value} value={item.value}>{item.label}</option>
@@ -367,7 +401,7 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
 
         <button
           type="submit"
-          className="h-[42px] min-w-[96px] flex-[0_0_auto] bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-blue-700"
+          className="lg:col-span-1 bg-blue-600 text-white rounded-lg px-3 py-2 text-sm hover:bg-blue-700"
         >
           Tìm
         </button>
@@ -375,7 +409,7 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
         <button
           type="button"
           onClick={handleResetFilters}
-          className="h-[42px] min-w-[96px] flex-[0_0_auto] border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+          className="lg:col-span-1 border border-gray-300 text-gray-700 rounded-lg px-3 py-2 text-sm hover:bg-gray-50"
         >
           Xóa
         </button>
@@ -541,40 +575,40 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
           )}
 
           <div className="overflow-x-auto">
-            <table className="w-full table-fixed text-sm text-left text-gray-600">
+            <table className="w-full text-sm text-left text-gray-600">
               <thead className="text-xs text-gray-700 uppercase bg-gray-50">
                 <tr>
-                  <th className="w-14 px-3 py-3 text-center">STT</th>
-                  <th className="w-[40%] px-4 py-3">Tiêu đề</th>
-                  <th className="w-32 px-3 py-3">Danh mục</th>
-                  {canModerateArticle && <th className="w-32 px-3 py-3">Trạng thái</th>}
-                  <th className="w-28 px-3 py-3">Ngày tạo</th>
-                  {showActionColumn && <th className="w-44 px-3 py-3">Hành động</th>}
+                  <th className="px-4 py-3">STT</th>
+                  <th className="px-4 py-3">Tiêu đề</th>
+                  <th className="px-4 py-3">Danh mục</th>
+                  {canModerateArticle && <th className="px-4 py-3">Trạng thái</th>}
+                  <th className="px-4 py-3">Ngày tạo</th>
+                  {showActionColumn && <th className="px-4 py-3">Hành động</th>}
                 </tr>
               </thead>
               <tbody>
                 {displayArticles.map((article, index) => (
                   <tr key={article.id} className="border-t hover:bg-gray-50 align-top">
-                    <td className="px-3 py-3 text-center">{total - rowOffset - index}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3">{total - rowOffset - index}</td>
+                    <td className="px-4 py-3 max-w-xs">
                       <button
                         onClick={() => navigate(`/articles/${article.id}`)}
-                        className="block w-full text-left text-blue-600 hover:text-blue-800 font-medium leading-relaxed whitespace-normal break-words"
+                        className="text-blue-600 hover:text-blue-800 font-medium truncate"
                       >
                         {article.title}
                       </button>
                     </td>
-                    <td className="px-3 py-3">{article.category}</td>
+                    <td className="px-4 py-3">{article.category}</td>
                     {canModerateArticle && (
-                      <td className="px-3 py-3">
+                      <td className="px-4 py-3">
                         <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${statusBadgeClass[article.status] || 'bg-gray-100 text-gray-700'}`}>
                           {statusLabel[article.status] || article.status || 'N/A'}
                         </span>
                       </td>
                     )}
-                    <td className="px-3 py-3">{new Date(article.createdAt).toLocaleDateString('vi-VN')}</td>
+                    <td className="px-4 py-3">{new Date(article.createdAt).toLocaleDateString('vi-VN')}</td>
                     {showActionColumn && (
-                      <td className="px-3 py-3">
+                      <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
                           {canModerateArticle && (article.status === 'Draft' || article.status === 'Rejected') && (
                             <button
@@ -643,27 +677,33 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
             </table>
           </div>
 
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-gray-600">
-              Tìm thấy {total} bài viết{filtersActive ? ' phù hợp bộ lọc' : ''}. Hiển thị trang {page} / {totalPages}.
+          {filtersActive ? (
+            <p className="mt-6 text-sm text-gray-600">
+              Tìm thấy {displayArticles.length} bài viết phù hợp.
             </p>
-            <div className="space-x-2">
-              <button
-                disabled={page === 1}
-                onClick={() => setPage(page - 1)}
-                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:opacity-50"
-              >
-                Trước
-              </button>
-              <button
-                disabled={page === totalPages}
-                onClick={() => setPage(page + 1)}
-                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:opacity-50"
-              >
-                Sau
-              </button>
+          ) : (
+            <div className="mt-6 flex justify-between items-center">
+              <p className="text-sm text-gray-600">
+                Hiển thị trang {page} của {totalPages} (Tổng {total} bài)
+              </p>
+              <div className="space-x-2">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage(page - 1)}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:opacity-50"
+                >
+                  Trước
+                </button>
+                <button
+                  disabled={page === totalPages}
+                  onClick={() => setPage(page + 1)}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:opacity-50"
+                >
+                  Sau
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
     </div>
