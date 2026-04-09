@@ -32,9 +32,17 @@ WardWebsite.Frontend/
 
 ## Setup Backend
 
-### 1. Tạo Database
-- Mở SQL Server Management Studio
-- Chạy file `database.sql`
+### 1. Cấu hình Database (Azure SQL - khuyến nghị)
+- Tạo Azure SQL Server + Azure SQL Database trên Azure Portal.
+- Lấy chuỗi kết nối ADO.NET và cấu hình vào biến môi trường `ConnectionStrings__DefaultConnection`.
+- Ví dụ (PowerShell):
+
+```powershell
+$env:ConnectionStrings__DefaultConnection = "Server=tcp:<server>.database.windows.net,1433;Initial Catalog=<database>;Persist Security Info=False;User ID=<user>;Password=<password>;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+```
+
+- Backend sử dụng EF Core migration và tự chạy `db.Database.Migrate()` khi khởi động, nên không cần chạy thủ công `database.sql`.
+- File `database.sql` chỉ dùng tham khảo hoặc khi bạn cần import dữ liệu thủ công cho môi trường riêng.
 
 ### 2. Cài đặt Dependencies
 ```bash
@@ -46,6 +54,11 @@ dotnet restore
 ```bash
 dotnet run
 # Server chạy ở http://localhost:5000
+```
+
+### 4. Cập nhật schema bằng migration (khi có thay đổi model)
+```bash
+dotnet ef database update
 ```
 
 ## Setup Frontend
@@ -139,14 +152,23 @@ npm run dev
 
 ## Chỉnh sửa Connection String
 
-File `appsettings.json`:
+### Azure SQL (khuyến nghị)
+
+Khai báo trong `appsettings.json` hoặc biến môi trường `ConnectionStrings__DefaultConnection`:
+
 ```json
 "ConnectionStrings": {
-  "DefaultConnection": "Server=YOUR_SERVER;Database=WardWebsite;Trusted_Connection=true;Encrypt=false;TrustServerCertificate=true;"
+  "DefaultConnection": "Server=tcp:<server>.database.windows.net,1433;Initial Catalog=<database>;Persist Security Info=False;User ID=<user>;Password=<password>;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
 }
 ```
 
-Thay `YOUR_SERVER` bằng SQL Server name của bạn (ví dụ: `.` hoặc `DESKTOP-XYZ`)
+### SQL Server local (tùy chọn cho dev máy cá nhân)
+
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Server=.;Database=WardWebsite;Trusted_Connection=true;Encrypt=false;TrustServerCertificate=true;"
+}
+```
 
 ## Ghi chú
 
