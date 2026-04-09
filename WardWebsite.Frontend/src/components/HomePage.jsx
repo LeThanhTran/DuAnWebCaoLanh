@@ -98,7 +98,7 @@ const governanceSnapshot = [
 
 const runningNotice = 'THÔNG BÁO NỔI BẬT: UBND Phường Cao Lãnh tiếp nhận và giải quyết thủ tục hành chính trực tuyến 24/7. Người dân vui lòng theo dõi trang để cập nhật lịch tiếp công dân, lịch làm việc và thông báo mới nhất.'
 
-export default function HomePage() {
+export default function HomePage({ showGovernanceSection = true }) {
   const featuredVideoRef = useRef(null)
 
   const [images, setImages] = useState({
@@ -210,20 +210,21 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Governance Snapshot Section */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-700">
-        <div className="container mx-auto px-4 py-8">
-          <p className="text-xs uppercase tracking-wider text-blue-200 mb-5 font-semibold">Thông tin điều hành nhanh</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {governanceSnapshot.map((item) => (
-              <div key={item.label} className="rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-3 hover:bg-slate-700/60 transition">
-                <p className="text-[11px] uppercase tracking-wider text-blue-200">{item.label}</p>
-                <p className="text-sm font-medium text-white mt-2 leading-relaxed">{item.value}</p>
-              </div>
-            ))}
+      {showGovernanceSection && (
+        <div className="bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-700">
+          <div className="container mx-auto px-4 py-8">
+            <p className="text-xs uppercase tracking-wider text-blue-200 mb-5 font-semibold">Thông tin điều hành nhanh</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {governanceSnapshot.map((item) => (
+                <div key={item.label} className="rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-3 hover:bg-slate-700/60 transition">
+                  <p className="text-[11px] uppercase tracking-wider text-blue-200">{item.label}</p>
+                  <p className="text-sm font-medium text-white mt-2 leading-relaxed">{item.value}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-16">

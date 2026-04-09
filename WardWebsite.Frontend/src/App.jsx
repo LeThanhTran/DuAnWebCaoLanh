@@ -79,6 +79,44 @@ const seoRules = [
   }
 ]
 
+const publicGovernanceSnapshot = [
+  {
+    label: 'Giờ tiếp công dân',
+    value: 'Thứ 3 & Thứ 5 | 08:00 - 11:00'
+  },
+  {
+    label: 'Tỷ lệ đúng hạn',
+    value: '98.7% hồ sơ giải quyết đúng hạn'
+  },
+  {
+    label: 'Hotline hỗ trợ',
+    value: '0277 3888 888'
+  },
+  {
+    label: 'Trạng thái cổng dịch vụ',
+    value: 'Đang hoạt động ổn định'
+  }
+]
+
+const publicQuickLinks = [
+  {
+    label: 'Tra cứu hồ sơ',
+    path: '/tra-cuu-ho-so'
+  },
+  {
+    label: 'Nộp hồ sơ online',
+    path: '/services'
+  },
+  {
+    label: 'Tải biểu mẫu',
+    path: '/bieu-mau'
+  },
+  {
+    label: 'Gửi phản ánh',
+    path: '/contact'
+  }
+]
+
 const getSeoForPath = (pathname) => {
   const matchedRule = seoRules.find((rule) => rule.test(pathname))
   return matchedRule ? { title: matchedRule.title, description: matchedRule.description } : defaultSeo
@@ -235,13 +273,92 @@ export default function App() {
                         <p>Truy cập nhanh các dịch vụ công, tra cứu hồ sơ và quản lý thông tin cá nhân.</p>
                       </div>
                       <LoginForm onLoginSuccess={handleLoginSuccess} />
+
+                      <div className="mt-4 rounded-2xl border border-slate-700 bg-gradient-to-r from-slate-900 to-slate-800 p-5 text-white shadow-sm fx-fade-up">
+                        <p className="text-xs uppercase tracking-wider text-blue-200 mb-4 font-semibold">Thông tin điều hành nhanh</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {publicGovernanceSnapshot.map((item) => (
+                            <div key={item.label} className="rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-3">
+                              <p className="text-[11px] uppercase tracking-wider text-blue-200">{item.label}</p>
+                              <p className="text-sm font-medium text-white mt-1.5 leading-relaxed">{item.value}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-4 border-t border-slate-700/80 pt-4">
+                          <p className="text-xs uppercase tracking-wider text-blue-200 mb-3 font-semibold">Lối tắt thao tác nhanh</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {publicQuickLinks.map((item) => (
+                              <button
+                                key={item.path}
+                                type="button"
+                                onClick={() => navigate(item.path)}
+                                className="rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2.5 text-left text-xs font-semibold text-blue-100 transition hover:border-blue-300 hover:bg-slate-700"
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2.5 text-xs text-blue-100">
+                          Cần hỗ trợ nhanh: 0277 3888 888 | 08:00 - 17:00 (Thứ 2 - Thứ 6)
+                        </div>
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-blue-200 bg-white/95 p-5 shadow-sm fx-fade-up">
+                        <p className="text-xs uppercase tracking-wider text-blue-700 mb-3 font-semibold">Hướng dẫn nhanh 3 bước</p>
+
+                        <div className="space-y-3">
+                          <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">1</span>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-800">Chọn dịch vụ cần thực hiện</p>
+                              <p className="text-xs text-slate-600 mt-0.5">Xem danh mục thủ tục và chuẩn bị đầy đủ giấy tờ theo hướng dẫn.</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">2</span>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-800">Nộp hồ sơ trực tuyến</p>
+                              <p className="text-xs text-slate-600 mt-0.5">Điền biểu mẫu, đính kèm tệp và gửi hồ sơ ngay trên cổng dịch vụ.</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-600 text-xs font-bold text-white">3</span>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-800">Theo dõi và nhận kết quả</p>
+                              <p className="text-xs text-slate-600 mt-0.5">Tra cứu tình trạng xử lý theo mã hồ sơ và nhận thông báo cập nhật.</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => navigate('/services')}
+                            className="rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+                          >
+                            Bắt đầu nộp hồ sơ
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigate('/tra-cuu-ho-so')}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                          >
+                            Tra cứu hồ sơ
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     <div className="lg:col-span-7 public-news-card fx-fade-up">
                       <ArticleList key={articleRefreshKey} />
                     </div>
                   </div>
                 </div>
-                <HomePage />
+                <HomePage showGovernanceSection={false} />
               </div>
             }
           />
