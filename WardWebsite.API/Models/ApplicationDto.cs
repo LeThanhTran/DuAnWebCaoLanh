@@ -9,6 +9,34 @@ namespace WardWebsite.API.Models
         public int ServiceId { get; set; }
     }
 
+    public class ApplicationLookupRequestDto
+    {
+        public string? LookupCode { get; set; }
+        public string? Phone { get; set; }
+    }
+
+    public class ApplicationLookupResultDto
+    {
+        public string LookupCode { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string Address { get; set; } = string.Empty;
+        public string? ServiceName { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string? Notes { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class ApplicationLookupSuggestionDto
+    {
+        public string LookupCode { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string PhoneMasked { get; set; } = string.Empty;
+        public string? ServiceName { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+    }
+
     // DTO for updating application status
     public class UpdateApplicationStatusDto
     {
@@ -20,6 +48,7 @@ namespace WardWebsite.API.Models
     public class ApplicationDto
     {
         public int Id { get; set; }
+        public string LookupCode { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         public string Address { get; set; } = string.Empty;

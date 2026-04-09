@@ -7,6 +7,7 @@ export default function ApplicationForm({ service = null, onBack = null }) {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submissionInfo, setSubmissionInfo] = useState(null);
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
@@ -62,10 +63,16 @@ export default function ApplicationForm({ service = null, onBack = null }) {
 
     try {
       setLoading(true);
-      await applicationAPI.createApplication({
+      const result = await applicationAPI.createApplication({
         ...formData,
         serviceId: parsedServiceId
       });
+
+      setSubmissionInfo({
+        lookupCode: result?.lookup?.lookupCode || result?.data?.lookupCode || '',
+        phone: result?.lookup?.phone || formData.phone
+      });
+
       setSubmitted(true);
       setFormData({
         fullName: '',
@@ -73,9 +80,13 @@ export default function ApplicationForm({ service = null, onBack = null }) {
         address: '',
         serviceId: service?.id ? String(service.id) : ''
       });
-      setTimeout(() => setSubmitted(false), 3000);
     } catch (error) {
-      alert('Lỗi nộp hồ sơ: ' + (error.response?.data?.message || error.message));
+      const status = error?.response?.status;
+      if (status === 401 || status === 403) {
+        alert('Bạn cần đăng nhập để nộp hồ sơ dịch vụ.');
+      } else {
+        alert('Lỗi nộp hồ sơ: ' + (error.response?.data?.message || error.message));
+      }
     } finally {
       setLoading(false);
     }
@@ -100,7 +111,23 @@ export default function ApplicationForm({ service = null, onBack = null }) {
 
       {submitted && (
         <div className="mb-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg">
-          Nộp hồ sơ thành công! Chúng tôi sẽ liên hệ với bạn trong thời gian sớm.
+          <p className="font-semibold">Nộp hồ sơ thành công! Chúng tôi sẽ liên hệ với bạn trong thời gian sớm.</p>
+          {submissionInfo?.lookupCode && (
+            <div className="mt-2 text-sm leading-relaxed">
+              <p>
+                Mã tra cứu hồ sơ: <span className="font-bold">{submissionInfo.lookupCode}</span>
+              </p>
+              <p>
+                Số điện thoại tra cứu: <span className="font-semibold">{submissionInfo.phone}</span>
+              </p>
+              <p className="mt-1">
+                Mã hồ sơ đã được gắn với số điện thoại của bạn để hỗ trợ tra cứu và gửi thông báo.
+              </p>
+              <p className="mt-1">
+                Bạn có thể vào <a href="/tra-cuu-ho-so" className="underline font-semibold">trang tra cứu hồ sơ</a> để theo dõi trạng thái.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

@@ -57,6 +57,50 @@ namespace WardWebsite.API.Migrations
                     b.ToTable("AdminActionLogs");
                 });
 
+            modelBuilder.Entity("WardWebsite.API.Models.AdminActionLogPurgeBackup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CutoffUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DeletedCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LogsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("PurgedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PurgedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("RestoredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RestoredBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("RestoredCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RetentionDays")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AdminActionLogPurgeBackups");
+                });
+
             modelBuilder.Entity("WardWebsite.API.Models.Application", b =>
                 {
                     b.Property<int>("Id")
@@ -76,6 +120,11 @@ namespace WardWebsite.API.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("LookupCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)");
 
@@ -88,9 +137,15 @@ namespace WardWebsite.API.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("Pending");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LookupCode")
+                        .IsUnique();
 
                     b.HasIndex("ServiceId");
 
@@ -115,9 +170,54 @@ namespace WardWebsite.API.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PublishedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("Draft");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ViewCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.HasKey("Id");
 
@@ -134,6 +234,18 @@ namespace WardWebsite.API.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -146,21 +258,25 @@ namespace WardWebsite.API.Migrations
                         new
                         {
                             Id = 1,
+                            IsDeleted = false,
                             Name = "Tin Tức"
                         },
                         new
                         {
                             Id = 2,
+                            IsDeleted = false,
                             Name = "Thông Báo"
                         },
                         new
                         {
                             Id = 3,
+                            IsDeleted = false,
                             Name = "Sự Kiện"
                         },
                         new
                         {
                             Id = 4,
+                            IsDeleted = false,
                             Name = "Chính Sách"
                         });
                 });
@@ -182,6 +298,29 @@ namespace WardWebsite.API.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUsername")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("Pending");
 
                     b.HasKey("Id");
 
@@ -223,6 +362,88 @@ namespace WardWebsite.API.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("ContactMessages");
+                });
+
+            modelBuilder.Entity("WardWebsite.API.Models.DownloadForm", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("DownloadCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("FileExtension")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<long>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FileUrl")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<int?>("ServiceId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UploadedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServiceId");
+
+                    b.ToTable("DownloadForms");
                 });
 
             modelBuilder.Entity("WardWebsite.API.Models.Media", b =>
@@ -326,13 +547,27 @@ namespace WardWebsite.API.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.HasKey("Id");
 
@@ -342,25 +577,29 @@ namespace WardWebsite.API.Migrations
                         new
                         {
                             Id = 1,
-                            Description = "Dịch vụ cấp chứng minh nhân dân",
-                            Name = "Cấp CMND"
+                            Description = "Dịch vụ cấp căn cước công dân",
+                            IsDeleted = false,
+                            Name = "Cấp CCCD"
                         },
                         new
                         {
                             Id = 2,
-                            Description = "Dịch vụ cấp/thay đổi sổ hộ khẩu",
-                            Name = "Cấp sổ hộ khẩu"
+                            Description = "Dịch vụ đăng ký và thay đổi thông tin cư trú",
+                            IsDeleted = false,
+                            Name = "Đăng ký & thay đổi thông tin cư trú"
                         },
                         new
                         {
                             Id = 3,
                             Description = "Dịch vụ đăng ký hôn nhân",
+                            IsDeleted = false,
                             Name = "Thủ tục hôn nhân"
                         },
                         new
                         {
                             Id = 4,
                             Description = "Dịch vụ cấp giấy khai sinh",
+                            IsDeleted = false,
                             Name = "Cấp giấy khai sinh"
                         });
                 });
@@ -373,16 +612,47 @@ namespace WardWebsite.API.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("AvatarUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("FullName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<int>("RoleId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
                     b.Property<string>("Username")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
 
@@ -394,8 +664,10 @@ namespace WardWebsite.API.Migrations
                         new
                         {
                             Id = 1,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             PasswordHash = "$2a$10$W7zrB2IPc3.lTGivsqKAL.VfLpX0K037/K5mqaQdAPmIlI35NZWPe",
                             RoleId = 3,
+                            UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Username = "demo"
                         });
                 });
@@ -433,6 +705,16 @@ namespace WardWebsite.API.Migrations
                     b.Navigation("Article");
                 });
 
+            modelBuilder.Entity("WardWebsite.API.Models.DownloadForm", b =>
+                {
+                    b.HasOne("WardWebsite.API.Models.Service", "Service")
+                        .WithMany("DownloadForms")
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Service");
+                });
+
             modelBuilder.Entity("WardWebsite.API.Models.User", b =>
                 {
                     b.HasOne("WardWebsite.API.Models.Role", "Role")
@@ -462,6 +744,8 @@ namespace WardWebsite.API.Migrations
             modelBuilder.Entity("WardWebsite.API.Models.Service", b =>
                 {
                     b.Navigation("Applications");
+
+                    b.Navigation("DownloadForms");
                 });
 #pragma warning restore 612, 618
         }

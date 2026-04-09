@@ -18,13 +18,14 @@ namespace WardWebsite.API.Controllers
         [HttpGet]
         public async Task<ActionResult<object>> GetStats()
         {
-            var totalArticles = await _context.Articles.CountAsync();
+            var totalArticles = await _context.Articles.CountAsync(a => !a.IsDeleted);
             var totalUsers = await _context.Users.CountAsync();
             var totalApplications = await _context.Applications.CountAsync();
-            var totalComments = await _context.Comments.CountAsync();
+            var totalComments = await _context.Comments.CountAsync(c => c.Article != null && !c.Article.IsDeleted);
 
             // Comments by article (top 5)
             var commentsByArticle = await _context.Articles
+                .Where(a => !a.IsDeleted)
                 .Select(a => new
                 {
                     title = a.Title.Length > 30 ? a.Title.Substring(0, 30) + "..." : a.Title,

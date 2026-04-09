@@ -16,9 +16,11 @@ namespace WardWebsite.API.Data
         public DbSet<Comment> Comments { get; set; }
         public DbSet<Service> Services { get; set; }
         public DbSet<Application> Applications { get; set; }
+        public DbSet<DownloadForm> DownloadForms { get; set; }
         public DbSet<Media> Media { get; set; }
         public DbSet<ContactMessage> ContactMessages { get; set; }
         public DbSet<AdminActionLog> AdminActionLogs { get; set; }
+        public DbSet<AdminActionLogPurgeBackup> AdminActionLogPurgeBackups { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -34,7 +36,15 @@ namespace WardWebsite.API.Data
             // Seed demo user (username: demo, password: 123456)
             // Hash pre-calculated: BCrypt.HashPassword("123456") with rounds=10
             modelBuilder.Entity<User>().HasData(
-                new User { Id = 1, Username = "demo", PasswordHash = "$2a$10$W7zrB2IPc3.lTGivsqKAL.VfLpX0K037/K5mqaQdAPmIlI35NZWPe", RoleId = 3 }
+                new User
+                {
+                    Id = 1,
+                    Username = "demo",
+                    PasswordHash = "$2a$10$W7zrB2IPc3.lTGivsqKAL.VfLpX0K037/K5mqaQdAPmIlI35NZWPe",
+                    RoleId = 3,
+                    CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                    UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                }
             );
 
             // Seed initial categories
@@ -45,7 +55,47 @@ namespace WardWebsite.API.Data
                 new Category { Id = 4, Name = "Chính Sách" }
             );
 
+            modelBuilder.Entity<Category>()
+                .Property(c => c.IsDeleted)
+                .HasDefaultValue(false);
+
+            modelBuilder.Entity<Category>()
+                .Property(c => c.DeletedBy)
+                .HasMaxLength(100);
+
             // User - Role relationship
+            modelBuilder.Entity<User>()
+                .Property(u => u.Username)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.FullName)
+                .HasMaxLength(150);
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.Email)
+                .HasMaxLength(150);
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.PhoneNumber)
+                .HasMaxLength(30);
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.Address)
+                .HasMaxLength(300);
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.AvatarUrl)
+                .HasMaxLength(500);
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.CreatedAt)
+                .HasDefaultValueSql("GETUTCDATE()");
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.UpdatedAt)
+                .HasDefaultValueSql("GETUTCDATE()");
+
             modelBuilder.Entity<User>()
                 .HasOne(u => u.Role)
                 .WithMany(r => r.Users)
@@ -59,6 +109,35 @@ namespace WardWebsite.API.Data
                 .HasForeignKey(a => a.CategoryId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<Article>()
+                .Property(a => a.Status)
+                .HasMaxLength(30)
+                .HasDefaultValue("Draft");
+
+            modelBuilder.Entity<Article>()
+                .Property(a => a.ReviewedBy)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<Article>()
+                .Property(a => a.PublishedBy)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<Article>()
+                .Property(a => a.ReviewNote)
+                .HasMaxLength(1000);
+
+            modelBuilder.Entity<Article>()
+                .Property(a => a.IsDeleted)
+                .HasDefaultValue(false);
+
+            modelBuilder.Entity<Article>()
+                .Property(a => a.DeletedBy)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<Article>()
+                .Property(a => a.ViewCount)
+                .HasDefaultValue(0);
+
             // Comment - Article relationship
             modelBuilder.Entity<Comment>()
                 .HasOne(c => c.Article)
@@ -66,13 +145,46 @@ namespace WardWebsite.API.Data
                 .HasForeignKey(c => c.ArticleId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<Comment>()
+                .Property(c => c.Status)
+                .HasMaxLength(30)
+                .HasDefaultValue("Pending");
+
+            modelBuilder.Entity<Comment>()
+                .Property(c => c.ReviewedBy)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<Comment>()
+                .Property(c => c.ReviewNote)
+                .HasMaxLength(1000);
+
+            modelBuilder.Entity<Comment>()
+                .Property(c => c.CreatedByUsername)
+                .HasMaxLength(100);
+
             // Seed services
             modelBuilder.Entity<Service>().HasData(
-                new Service { Id = 1, Name = "Cấp CMND", Description = "Dịch vụ cấp chứng minh nhân dân" },
-                new Service { Id = 2, Name = "Cấp sổ hộ khẩu", Description = "Dịch vụ cấp/thay đổi sổ hộ khẩu" },
+                new Service { Id = 1, Name = "Cấp CCCD", Description = "Dịch vụ cấp căn cước công dân" },
+                new Service { Id = 2, Name = "Đăng ký & thay đổi thông tin cư trú", Description = "Dịch vụ đăng ký và thay đổi thông tin cư trú" },
                 new Service { Id = 3, Name = "Thủ tục hôn nhân", Description = "Dịch vụ đăng ký hôn nhân" },
                 new Service { Id = 4, Name = "Cấp giấy khai sinh", Description = "Dịch vụ cấp giấy khai sinh" }
             );
+
+            modelBuilder.Entity<Service>()
+                .Property(s => s.Name)
+                .HasMaxLength(200);
+
+            modelBuilder.Entity<Service>()
+                .Property(s => s.Description)
+                .HasMaxLength(2000);
+
+            modelBuilder.Entity<Service>()
+                .Property(s => s.IsDeleted)
+                .HasDefaultValue(false);
+
+            modelBuilder.Entity<Service>()
+                .Property(s => s.DeletedBy)
+                .HasMaxLength(100);
 
             // Seed media
             modelBuilder.Entity<Media>().HasData(
@@ -90,6 +202,77 @@ namespace WardWebsite.API.Data
                 .WithMany(s => s.Applications)
                 .HasForeignKey(app => app.ServiceId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Application>()
+                .Property(app => app.LookupCode)
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<Application>()
+                .Property(app => app.Status)
+                .HasMaxLength(30)
+                .HasDefaultValue("Pending");
+
+            modelBuilder.Entity<Application>()
+                .HasIndex(app => app.LookupCode)
+                .IsUnique();
+
+            modelBuilder.Entity<DownloadForm>()
+                .Property(f => f.Title)
+                .HasMaxLength(200);
+
+            modelBuilder.Entity<DownloadForm>()
+                .Property(f => f.Description)
+                .HasMaxLength(1000);
+
+            modelBuilder.Entity<DownloadForm>()
+                .Property(f => f.OriginalFileName)
+                .HasMaxLength(260);
+
+            modelBuilder.Entity<DownloadForm>()
+                .Property(f => f.FileExtension)
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<DownloadForm>()
+                .Property(f => f.UploadedBy)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<DownloadForm>()
+                .Property(f => f.IsActive)
+                .HasDefaultValue(true);
+
+            modelBuilder.Entity<DownloadForm>()
+                .Property(f => f.SortOrder)
+                .HasDefaultValue(0);
+
+            modelBuilder.Entity<DownloadForm>()
+                .Property(f => f.DownloadCount)
+                .HasDefaultValue(0);
+
+            modelBuilder.Entity<DownloadForm>()
+                .Property(f => f.IsDeleted)
+                .HasDefaultValue(false);
+
+            modelBuilder.Entity<DownloadForm>()
+                .Property(f => f.DeletedBy)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<DownloadForm>()
+                .HasOne(f => f.Service)
+                .WithMany(s => s.DownloadForms)
+                .HasForeignKey(f => f.ServiceId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<AdminActionLogPurgeBackup>()
+                .Property(x => x.PurgedBy)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<AdminActionLogPurgeBackup>()
+                .Property(x => x.RestoredBy)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<AdminActionLogPurgeBackup>()
+                .Property(x => x.LogsJson)
+                .HasColumnType("nvarchar(max)");
         }
     }
 }

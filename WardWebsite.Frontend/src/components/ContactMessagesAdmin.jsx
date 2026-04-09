@@ -4,6 +4,7 @@ import axios from 'axios'
 export default function ContactMessagesAdmin() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
+  const [processingId, setProcessingId] = useState(null)
 
   const currentUser = useMemo(() => {
     try {
@@ -34,13 +35,35 @@ export default function ContactMessagesAdmin() {
 
   const handleMarkHandled = async (id) => {
     try {
+      setProcessingId(id)
       const token = localStorage.getItem('token')
       await axios.put(`/api/contactmessages/${id}/handled`, {}, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       })
-      fetchItems()
+      await fetchItems()
     } catch (error) {
       alert(error.response?.data?.message || 'Cập nhật trạng thái thất bại')
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Xóa tin nhắn liên hệ này?')) {
+      return
+    }
+
+    try {
+      setProcessingId(id)
+      const token = localStorage.getItem('token')
+      await axios.delete(`/api/contactmessages/${id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      })
+      await fetchItems()
+    } catch (error) {
+      alert(error.response?.data?.message || 'Xóa tin nhắn thất bại')
+    } finally {
+      setProcessingId(null)
     }
   }
 
@@ -81,13 +104,23 @@ export default function ContactMessagesAdmin() {
                   <td className="px-4 py-3">{new Date(item.createdAt).toLocaleString('vi-VN')}</td>
                   <td className="px-4 py-3">
                     {item.isHandled ? (
-                      <span className="text-green-700 font-medium">Đã xử lý</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-700 font-medium">Đã xử lý</span>
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          disabled={processingId === item.id}
+                          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                        >
+                          {processingId === item.id ? 'Đang xóa...' : 'Xóa'}
+                        </button>
+                      </div>
                     ) : (
                       <button
                         onClick={() => handleMarkHandled(item.id)}
-                        className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                        disabled={processingId === item.id}
+                        className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
                       >
-                        Đánh dấu đã xử lý
+                        {processingId === item.id ? 'Đang cập nhật...' : 'Đánh dấu đã xử lý'}
                       </button>
                     )}
                   </td>

@@ -57,7 +57,7 @@ export default function ContactMessagesBubble() {
   return (
     <div className="fixed bottom-6 right-6 z-50">
       {open && (
-        <div className="mb-3 w-96 max-w-[92vw] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
+        <div className="mb-3 w-96 max-w-[92vw] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden fx-fade-up">
           <div className="px-4 py-3 bg-blue-600 text-white flex items-center justify-between">
             <h3 className="font-semibold">Tin nhắn liên hệ</h3>
             <button onClick={() => setOpen(false)} className="text-white/90 hover:text-white">✕</button>
@@ -68,7 +68,7 @@ export default function ContactMessagesBubble() {
             {!loading && messages.length === 0 && <p className="text-sm text-gray-500">Chưa có tin nhắn.</p>}
 
             {messages.map((item) => (
-              <div key={item.id} className="border border-gray-200 rounded-lg p-3">
+              <div key={item.id} className="border border-gray-200 rounded-lg p-3 fx-card-lift">
                 <div className="flex items-center justify-between mb-1">
                   <p className="font-semibold text-sm">{item.name}</p>
                   <span className={`text-xs px-2 py-0.5 rounded ${item.isHandled ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
@@ -82,7 +82,7 @@ export default function ContactMessagesBubble() {
                   {!item.isHandled && (
                     <button
                       onClick={() => markHandled(item.id)}
-                      className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+                      className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 fx-button-pop"
                     >
                       Đánh dấu đã xử lý
                     </button>
@@ -94,18 +94,23 @@ export default function ContactMessagesBubble() {
         </div>
       )}
 
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="relative h-14 w-14 rounded-full bg-blue-600 text-white shadow-xl hover:bg-blue-700 transition"
-        title="Tin nhắn liên hệ"
-      >
-        📨
+      <div className="messenger-fab" title="Tin nhắn liên hệ">
+        <span className="messenger-ring" aria-hidden="true" />
+        <span className="messenger-ring delay" aria-hidden="true" />
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="messenger-btn"
+          aria-label="Mở tin nhắn liên hệ"
+        >
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M20.94 6.94a1.5 1.5 0 0 0-1.66-.32L3.88 12.67a1.1 1.1 0 0 0 .06 2.07l4.06 1.45 1.45 4.06a1.1 1.1 0 0 0 2.07.06l6.05-15.4a1.5 1.5 0 0 0-.32-1.66ZM9.43 15.56l7.22-7.22-5.02 8.51-.82-2.32a1 1 0 0 0-.6-.6l-2.32-.82.54-.9Z" fill="currentColor"/>
+          </svg>
+        </button>
+
         {unhandled.length > 0 && (
-          <span className="absolute -top-1 -right-1 h-6 min-w-[24px] px-1 rounded-full bg-red-500 text-white text-xs flex items-center justify-center">
-            {unhandled.length}
-          </span>
+          <span className="messenger-badge">{unhandled.length}</span>
         )}
-      </button>
+      </div>
     </div>
   )
 }

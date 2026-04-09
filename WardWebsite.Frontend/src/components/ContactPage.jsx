@@ -29,54 +29,57 @@ export default function ContactPage() {
   }
 
   return (
-    <div>
-      <h2 className="text-3xl font-bold text-gray-800 mb-12">📞 Liên Hệ</h2>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-        {/* Contact Info */}
+    <div className="contact-page space-y-6">
+      <section className="contact-hero fx-fade-up">
         <div>
-          <div className="bg-white rounded-lg shadow p-8 mb-8">
-            <h3 className="text-2xl font-bold text-gray-800 mb-6">UBND Phường Cao Lãnh</h3>
+          <p className="contact-eyebrow">Kênh hỗ trợ công dân</p>
+          <h2>Liên hệ UBND Phường Cao Lãnh</h2>
+          <p>
+            Gửi phản ánh, kiến nghị hoặc câu hỏi hành chính. Bộ phận tiếp nhận sẽ phản hồi trong thời gian sớm nhất.
+          </p>
+        </div>
+        <div className="contact-hero-chip">
+          <span>08:00 - 17:00</span>
+          <small>Thứ Hai đến Thứ Sáu</small>
+        </div>
+      </section>
 
-            <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="space-y-6">
+          <div className="contact-info-card fx-fade-up">
+            <h3>Thông tin liên hệ</h3>
+
+            <div className="contact-info-list">
               <div>
-                <p className="text-gray-600 font-medium">📍 Địa chỉ</p>
-                <p className="text-gray-800 mt-1">Phường Cao Lãnh, Thành phố Cao Lãnh, Tỉnh Đồng Tháp</p>
+                <p>Địa chỉ</p>
+                <strong>Phường Cao Lãnh, Thành phố Cao Lãnh, Tỉnh Đồng Tháp</strong>
               </div>
 
               <div>
-                <p className="text-gray-600 font-medium">📱 Điện thoại</p>
-                <p className="text-gray-800 mt-1">
-                  <a href="tel:02773888888" className="text-blue-600 hover:underline">
-                    0277 388 8888
-                  </a>
-                </p>
+                <p>Điện thoại</p>
+                <strong>
+                  <a href="tel:02773888888">0277 388 8888</a>
+                </strong>
               </div>
 
               <div>
-                <p className="text-gray-600 font-medium">✉️ Email</p>
-                <p className="text-gray-800 mt-1">
-                  <a href="mailto:ubnd@caolanhward.gov.vn" className="text-blue-600 hover:underline">
-                    ubnd@caolanhward.gov.vn
-                  </a>
-                </p>
+                <p>Email</p>
+                <strong>
+                  <a href="mailto:ubnd@caolanhward.gov.vn">ubnd@caolanhward.gov.vn</a>
+                </strong>
               </div>
 
               <div>
-                <p className="text-gray-600 font-medium">🕐 Giờ làm việc</p>
-                <p className="text-gray-800 mt-1">Thứ Hai - Thứ Sáu: 8:00 - 17:00</p>
-                <p className="text-gray-800">Thứ Bảy: 8:00 - 12:00</p>
-                <p className="text-gray-800">Chủ Nhật: Nghỉ</p>
+                <p>Giờ làm việc</p>
+                <strong>Thứ Hai - Thứ Sáu: 8:00 - 17:00</strong>
+                <span>Thứ Bảy: 8:00 - 12:00 | Chủ Nhật: Nghỉ</span>
               </div>
             </div>
           </div>
 
-          {/* Map */}
-          <div className="bg-white rounded-lg shadow overflow-hidden h-96">
+          <div className="contact-map-card fx-fade-up">
             <iframe
-              width="100%"
-              height="100%"
-              frameBorder="0"
+              className="contact-map-iframe"
               title="UBND Cao Lãnh"
               src="https://www.google.com/maps?q=UBND+Th%C3%A0nh+ph%E1%BB%91+Cao+L%C3%A3nh,+%C4%90%E1%BB%93ng+Th%C3%A1p&output=embed"
               allowFullScreen=""
@@ -85,73 +88,71 @@ export default function ContactPage() {
           </div>
         </div>
 
-        {/* Contact Form */}
-        <div className="bg-white rounded-lg shadow p-8">
-          <h3 className="text-2xl font-bold text-gray-800 mb-6">Gửi Tin Nhắn</h3>
+        <div className="contact-form-card fx-fade-up">
+          <h3>Gửi tin nhắn</h3>
 
           {submitted && (
-            <div className="bg-green-100 text-green-800 p-4 rounded mb-6">
-              ✅ Cảm ơn bạn! Chúng tôi sẽ liên hệ lại sớm nhất.
+            <div className="contact-success-message">
+              Cảm ơn bạn! Chúng tôi sẽ liên hệ lại sớm nhất.
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-gray-700 font-medium mb-2">Họ Tên *</label>
+              <label className="contact-label">Họ tên *</label>
               <input
                 type="text"
                 name="name"
                 value={form.name}
                 onChange={handleChange}
                 placeholder="Nhập họ tên"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="contact-input"
                 required
               />
             </div>
 
-            <div>
-              <label className="block text-gray-700 font-medium mb-2">Email *</label>
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                placeholder="Nhập email"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-                required
-              />
+            <div className="contact-grid-2">
+              <div>
+                <label className="contact-label">Email *</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder="Nhập email"
+                  className="contact-input"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="contact-label">Điện thoại</label>
+                <input
+                  type="tel"
+                  name="phone"
+                  value={form.phone}
+                  onChange={handleChange}
+                  placeholder="Nhập số điện thoại"
+                  className="contact-input"
+                />
+              </div>
             </div>
 
             <div>
-              <label className="block text-gray-700 font-medium mb-2">Điện Thoại</label>
-              <input
-                type="tel"
-                name="phone"
-                value={form.phone}
-                onChange={handleChange}
-                placeholder="Nhập số điện thoại"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-medium mb-2">Tin Nhắn *</label>
+              <label className="contact-label">Tin nhắn *</label>
               <textarea
                 name="message"
                 value={form.message}
                 onChange={handleChange}
                 placeholder="Nhập nội dung tin nhắn"
                 rows="6"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="contact-input contact-textarea"
                 required
               ></textarea>
             </div>
 
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white font-medium py-3 rounded-lg hover:bg-blue-700 transition"
-            >
-              Gửi
+            <button type="submit" className="contact-submit-btn">
+              Gửi liên hệ
             </button>
           </form>
         </div>

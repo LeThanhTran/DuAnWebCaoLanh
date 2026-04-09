@@ -67,10 +67,42 @@ const applicationAPI = {
   // Create new application
   createApplication: async (formData) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/applications`, formData);
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`${API_BASE_URL}/applications`, formData, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       return response.data;
     } catch (error) {
       console.error('Error creating application:', error);
+      throw error;
+    }
+  },
+
+  // Public lookup application status
+  lookupApplication: async ({ lookupCode, phone }) => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/applications/lookup`, {
+        lookupCode,
+        phone
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error looking up application:', error);
+      throw error;
+    }
+  },
+
+  // Public lookup suggestions for realtime search
+  lookupSuggestions: async (query, limit = 8) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/applications/lookup-suggestions`, {
+        params: { q: query, limit }
+      });
+
+      return response.data.data || [];
+    } catch (error) {
+      console.error('Error fetching lookup suggestions:', error);
       throw error;
     }
   },

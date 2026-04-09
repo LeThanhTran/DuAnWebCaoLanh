@@ -70,7 +70,7 @@ export default function ApplicationManagement() {
       } else if (status === 403) {
         setError('Bạn không có quyền xem trang quản lý hồ sơ.');
       } else {
-        setError('Không tải được danh sách hồ sơ. Kiểm tra backend đang chạy ở cổng 5000.');
+        setError('Không tải được danh sách hồ sơ. Vui lòng thử lại sau hoặc liên hệ quản trị viên.');
       }
       console.error('Get applications failed:', message || err);
     } finally {
@@ -152,12 +152,13 @@ export default function ApplicationManagement() {
     });
 
     const rows = [
-      ['ID', 'Ho ten', 'Dich vu', 'So dien thoai', 'Dia chi', 'Trang thai', 'Ngay nop']
+      ['ID', 'Ma tra cuu', 'Ho ten', 'Dich vu', 'So dien thoai', 'Dia chi', 'Trang thai', 'Ngay nop']
     ];
 
     (result.data || []).forEach((item) => {
       rows.push([
         item.id,
+        item.lookupCode || '',
         item.fullName || '',
         item.serviceName || '',
         item.phone || '',
@@ -312,6 +313,7 @@ export default function ApplicationManagement() {
               <table className="min-w-full border border-gray-200 text-sm">
                 <thead className="bg-gray-100">
                   <tr>
+                    <th className="px-4 py-3 text-left">Mã tra cứu</th>
                     <th className="px-4 py-3 text-left">Họ tên</th>
                     <th className="px-4 py-3 text-left">Dịch vụ</th>
                     <th className="px-4 py-3 text-left">Liên hệ</th>
@@ -323,6 +325,7 @@ export default function ApplicationManagement() {
                 <tbody>
                   {filteredApplications.map((item) => (
                     <tr key={item.id} className="border-t border-gray-200 hover:bg-gray-50">
+                      <td className="px-4 py-3 font-semibold text-blue-700">{item.lookupCode || '-'}</td>
                       <td className="px-4 py-3 font-medium text-gray-800">{item.fullName}</td>
                       <td className="px-4 py-3">{item.serviceName || '-'}</td>
                       <td className="px-4 py-3">{item.phone || '-'}</td>

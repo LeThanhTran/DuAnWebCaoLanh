@@ -22,3 +22,10 @@
 **/appsettings.Development.json
 **/.env
 **/.env.*
+
+# Generated/deployment/runtime artifacts
+artifacts/
+WardWebsite.API/wwwroot/index.html
+WardWebsite.API/wwwroot/assets/
+WardWebsite.API/wwwroot/uploads/
+WardWebsite.API/App_Data/

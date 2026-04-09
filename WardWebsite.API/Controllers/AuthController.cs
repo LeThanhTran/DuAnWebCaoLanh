@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net.Mail;
 using System.Security.Claims;
 using WardWebsite.API.Data;
 using WardWebsite.API.Models;
@@ -34,10 +35,16 @@ namespace WardWebsite.API.Controllers
                 });
             }
 
+            var loginIdentifier = dto.Username.Trim();
+            var emailIdentifier = loginIdentifier.ToLowerInvariant();
+
             // 2. Tìm user trong database
             var user = await _context.Users
                 .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Username == dto.Username);
+                .FirstOrDefaultAsync(u =>
+                    u.Username == loginIdentifier
+                    || (u.Email != null && u.Email == emailIdentifier)
+                    || (u.PhoneNumber != null && u.PhoneNumber == loginIdentifier));
 
             if (user == null)
             {
@@ -69,8 +76,110 @@ namespace WardWebsite.API.Controllers
                 Success = true,
                 Message = "Đăng nhập thành công",
                 Token = token,
-                User = new { user.Id, user.Username, Role = user.Role!.Name }
+                User = new
+                {
+                    user.Id,
+                    user.Username,
+                    Role = user.Role!.Name,
+                    user.FullName,
+                    user.Email,
+                    user.PhoneNumber,
+                    user.Address,
+                    user.AvatarUrl
+                }
             });
+        }
+
+        [HttpPost("forgot-password")]
+        public async Task<ActionResult<object>> ForgotPassword([FromBody] ForgotPasswordDto dto)
+        {
+            if (dto == null)
+            {
+                return BadRequest(new { success = false, message = "Dữ liệu không hợp lệ" });
+            }
+
+            var identifier = dto.Identifier?.Trim();
+            var email = dto.Email?.Trim().ToLowerInvariant();
+            var phoneNumber = dto.PhoneNumber?.Trim();
+
+            if (string.IsNullOrWhiteSpace(identifier)
+                || string.IsNullOrWhiteSpace(email)
+                || string.IsNullOrWhiteSpace(phoneNumber)
+                || string.IsNullOrWhiteSpace(dto.NewPassword)
+                || string.IsNullOrWhiteSpace(dto.ConfirmNewPassword))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Vui lòng nhập đầy đủ thông tin xác thực và mật khẩu mới"
+                });
+            }
+
+            if (!IsValidEmail(email))
+            {
+                return BadRequest(new { success = false, message = "Email không hợp lệ" });
+            }
+
+            if (dto.NewPassword.Length < 6)
+            {
+                return BadRequest(new { success = false, message = "Mật khẩu mới phải có ít nhất 6 ký tự" });
+            }
+
+            if (!string.Equals(dto.NewPassword, dto.ConfirmNewPassword, StringComparison.Ordinal))
+            {
+                return BadRequest(new { success = false, message = "Xác nhận mật khẩu mới không khớp" });
+            }
+
+            var user = await _context.Users.FirstOrDefaultAsync(u =>
+                u.Username == identifier
+                || (u.Email != null && u.Email == identifier.ToLowerInvariant())
+                || (u.PhoneNumber != null && u.PhoneNumber == identifier));
+
+            if (user == null)
+            {
+                return NotFound(new { success = false, message = "Không tìm thấy tài khoản phù hợp" });
+            }
+
+            var userEmail = user.Email?.Trim().ToLowerInvariant() ?? string.Empty;
+            var userPhone = user.PhoneNumber?.Trim() ?? string.Empty;
+
+            if (!string.Equals(userEmail, email, StringComparison.Ordinal)
+                || !string.Equals(userPhone, phoneNumber, StringComparison.Ordinal))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Email hoặc số điện thoại xác thực không khớp với tài khoản"
+                });
+            }
+
+            if (BCrypt.Net.BCrypt.Verify(dto.NewPassword, user.PasswordHash))
+            {
+                return BadRequest(new { success = false, message = "Mật khẩu mới không được trùng mật khẩu hiện tại" });
+            }
+
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            user.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                success = true,
+                message = "Đặt lại mật khẩu thành công. Bạn có thể đăng nhập bằng mật khẩu mới."
+            });
+        }
+
+        private static bool IsValidEmail(string email)
+        {
+            try
+            {
+                _ = new MailAddress(email);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private string GenerateJwtToken(User user)

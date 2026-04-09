@@ -91,6 +91,36 @@ namespace WardWebsite.API.Controllers
 
             return Ok(new { success = true, message = "Đã đánh dấu đã xử lý" });
         }
+
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteHandled(int id)
+        {
+            var item = await _context.ContactMessages.FindAsync(id);
+            if (item == null)
+            {
+                return NotFound(new { success = false, message = "Không tìm thấy liên hệ" });
+            }
+
+            if (!item.IsHandled)
+            {
+                return BadRequest(new { success = false, message = "Chỉ được xóa tin nhắn đã xử lý" });
+            }
+
+            _context.ContactMessages.Remove(item);
+            _context.AdminActionLogs.Add(new AdminActionLog
+            {
+                AdminUsername = User?.Identity?.Name ?? "Unknown",
+                Action = "Xóa liên hệ đã xử lý",
+                TargetType = "ContactMessage",
+                TargetId = id,
+                Details = $"Xóa liên hệ của {item.Name}",
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+
+            return Ok(new { success = true, message = "Đã xóa tin nhắn liên hệ" });
+        }
     }
 
     public class CreateContactMessageDto

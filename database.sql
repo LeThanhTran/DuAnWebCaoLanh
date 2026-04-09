@@ -71,8 +71,8 @@ CREATE TABLE [Services] (
 );
 GO
 
-INSERT INTO [Services] ([Name], [Description]) VALUES ('Cấp CMND', 'Dịch vụ cấp chứng minh nhân dân');
-INSERT INTO [Services] ([Name], [Description]) VALUES ('Cấp sổ hộ khẩu', 'Dịch vụ cấp/thay đổi sổ hộ khẩu');
+INSERT INTO [Services] ([Name], [Description]) VALUES ('Cấp CCCD', 'Dịch vụ cấp căn cước công dân');
+INSERT INTO [Services] ([Name], [Description]) VALUES ('Đăng ký & thay đổi thông tin cư trú', 'Dịch vụ đăng ký và thay đổi thông tin cư trú');
 INSERT INTO [Services] ([Name], [Description]) VALUES ('Thủ tục hôn nhân', 'Dịch vụ đăng ký hôn nhân');
 INSERT INTO [Services] ([Name], [Description]) VALUES ('Cấp giấy khai sinh', 'Dịch vụ cấp giấy khai sinh');
 GO
@@ -88,4 +88,23 @@ CREATE TABLE [Applications] (
 GO
 
 CREATE INDEX [IX_Applications_ServiceId] ON [Applications]([ServiceId]);
+GO
+
+CREATE TABLE [Media] (
+    [Id] INT PRIMARY KEY IDENTITY(1,1),
+    [Url] NVARCHAR(MAX) NOT NULL,
+    [Type] NVARCHAR(100) NOT NULL
+);
+GO
+
+SET IDENTITY_INSERT [Media] ON;
+INSERT INTO [Media] ([Id], [Url], [Type]) VALUES (1, 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=400&h=300&fit=crop', 'Image');
+INSERT INTO [Media] ([Id], [Url], [Type]) VALUES (2, 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=400&h=300&fit=crop', 'Image');
+INSERT INTO [Media] ([Id], [Url], [Type]) VALUES (3, 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400&h=300&fit=crop', 'Image');
+INSERT INTO [Media] ([Id], [Url], [Type]) VALUES (4, 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&h=300&fit=crop', 'Image');
+INSERT INTO [Media] ([Id], [Url], [Type]) VALUES (5, 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&h=300&fit=crop', 'Image');
+INSERT INTO [Media] ([Id], [Url], [Type]) VALUES (6, 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&h=300&fit=crop', 'Image');
+INSERT INTO [Media] ([Id], [Url], [Type]) VALUES (7, 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4', 'Video');
+INSERT INTO [Media] ([Id], [Url], [Type]) VALUES (8, 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm', 'Video');
+SET IDENTITY_INSERT [Media] OFF;
 GO

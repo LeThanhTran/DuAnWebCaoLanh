@@ -94,22 +94,93 @@ namespace WardWebsite.API.Controllers
         // POST: api/applications
         // Create new application
         [HttpPost]
-        [AllowAnonymous]
+        [Authorize(Roles = "Admin,Editor,Viewer")]
         public async Task<ActionResult<ApplicationDto>> CreateApplication([FromBody] CreateApplicationDto dto)
         {
             try
             {
-                if (string.IsNullOrEmpty(dto.FullName) || string.IsNullOrEmpty(dto.Phone) || dto.ServiceId <= 0)
+                if (string.IsNullOrWhiteSpace(dto.FullName) || string.IsNullOrWhiteSpace(dto.Phone) || dto.ServiceId <= 0)
                     return BadRequest(new { success = false, message = "Vui lòng điền đầy đủ thông tin" });
 
                 var application = await _repository.CreateApplicationAsync(dto);
+
                 return CreatedAtAction(nameof(GetApplicationById), new { id = application.Id }, 
-                    new { success = true, data = application });
+                    new
+                    {
+                        success = true,
+                        message = "Nộp hồ sơ thành công",
+                        data = application,
+                        lookup = new
+                        {
+                            lookupCode = application.LookupCode,
+                            phone = application.Phone
+                        },
+                        notification = new
+                        {
+                            channel = "phone",
+                            phone = application.Phone,
+                            message = "Mã tra cứu đã được gắn theo số điện thoại để tra cứu trạng thái hồ sơ"
+                        }
+                    });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
+        }
+
+        // POST: api/applications/lookup
+        // Public endpoint for citizen to lookup application status
+        [HttpPost("lookup")]
+        [AllowAnonymous]
+        public async Task<ActionResult> LookupApplication([FromBody] ApplicationLookupRequestDto dto)
+        {
+            if (dto == null || (string.IsNullOrWhiteSpace(dto.LookupCode) && string.IsNullOrWhiteSpace(dto.Phone)))
+            {
+                return BadRequest(new { success = false, message = "Vui lòng nhập ít nhất mã tra cứu hoặc số điện thoại" });
+            }
+
+            var applications = await _repository.LookupApplicationsAsync(dto.LookupCode, dto.Phone);
+            if (applications.Count == 0)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Không tìm thấy hồ sơ. Vui lòng kiểm tra lại mã tra cứu hoặc số điện thoại"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                total = applications.Count,
+                data = applications
+            });
+        }
+
+        // GET: api/applications/lookup-suggestions?q=HS2026&limit=8
+        // Public endpoint for realtime suggestion while user is typing lookup code/phone
+        [HttpGet("lookup-suggestions")]
+        [AllowAnonymous]
+        public async Task<ActionResult> LookupSuggestions([FromQuery] string q, [FromQuery] int limit = 8)
+        {
+            if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
+            {
+                return Ok(new
+                {
+                    success = true,
+                    total = 0,
+                    data = new List<ApplicationLookupSuggestionDto>()
+                });
+            }
+
+            var suggestions = await _repository.GetLookupSuggestionsAsync(q, limit);
+            return Ok(new
+            {
+                success = true,
+                total = suggestions.Count,
+                data = suggestions
+            });
         }
 
         // PUT: api/applications/{id}/status
