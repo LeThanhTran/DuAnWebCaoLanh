@@ -1,9 +1,12 @@
 using System.Text;
 using System.Threading.RateLimiting;
 using System.Net;
+using System.IO.Compression;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -74,6 +77,23 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
+
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+});
+
+builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
+{
+    options.Level = CompressionLevel.Fastest;
+});
+
+builder.Services.Configure<GzipCompressionProviderOptions>(options =>
+{
+    options.Level = CompressionLevel.Fastest;
+});
 
 builder.Services.AddCors(options =>
 {
@@ -295,6 +315,96 @@ string ReplaceCanonicalHref(string html, string href)
     );
 }
 
+string BuildRouteStructuredData(string normalizedPath, string canonicalUrl, string title, string description, string siteUrl)
+{
+    object payload;
+
+    if (string.Equals(normalizedPath, "/articles", StringComparison.OrdinalIgnoreCase))
+    {
+        payload = new
+        {
+            @context = "https://schema.org",
+            @graph = new object[]
+            {
+                new
+                {
+                    @type = "CollectionPage",
+                    name = title,
+                    description,
+                    url = canonicalUrl,
+                    inLanguage = "vi-VN",
+                    isPartOf = new
+                    {
+                        @type = "WebSite",
+                        name = "Phường Cao Lãnh - Cổng thông tin và dịch vụ công trực tuyến",
+                        url = siteUrl
+                    }
+                },
+                new
+                {
+                    @type = "BreadcrumbList",
+                    itemListElement = new object[]
+                    {
+                        new { @type = "ListItem", position = 1, name = "Trang chủ", item = $"{siteUrl}/" },
+                        new { @type = "ListItem", position = 2, name = "Tin tức", item = canonicalUrl }
+                    }
+                }
+            }
+        };
+    }
+    else if (Regex.IsMatch(normalizedPath, @"^/articles/\d+$", RegexOptions.IgnoreCase))
+    {
+        payload = new
+        {
+            @context = "https://schema.org",
+            @type = "NewsArticle",
+            headline = title,
+            description,
+            mainEntityOfPage = canonicalUrl,
+            url = canonicalUrl,
+            inLanguage = "vi-VN",
+            publisher = new
+            {
+                @type = "GovernmentOrganization",
+                name = "UBND Phường Cao Lãnh",
+                url = siteUrl
+            }
+        };
+    }
+    else
+    {
+        payload = new
+        {
+            @context = "https://schema.org",
+            @type = "WebPage",
+            name = title,
+            description,
+            url = canonicalUrl,
+            inLanguage = "vi-VN"
+        };
+    }
+
+    return JsonSerializer.Serialize(payload);
+}
+
+string UpsertRouteStructuredData(string html, string structuredDataJson)
+{
+    var scriptTag = $"<script id=\"route-jsonld\" type=\"application/ld+json\">{structuredDataJson}</script>";
+    var pattern = @"<script\s+id\s*=\s*[\""']route-jsonld[\""']\s+type\s*=\s*[\""']application/ld\+json[\""']\s*>[\s\S]*?</script>";
+
+    if (Regex.IsMatch(html, pattern, RegexOptions.IgnoreCase))
+    {
+        return Regex.Replace(html, pattern, scriptTag, RegexOptions.IgnoreCase);
+    }
+
+    return Regex.Replace(
+        html,
+        "</head>",
+        $"{Environment.NewLine}    {scriptTag}{Environment.NewLine}  </head>",
+        RegexOptions.IgnoreCase
+    );
+}
+
 var enableSwagger = builder.Configuration.GetValue("Swagger:Enabled", app.Environment.IsDevelopment());
 var requireHttps = builder.Configuration.GetValue("Security:RequireHttps", !app.Environment.IsDevelopment());
 
@@ -431,8 +541,37 @@ app.Use(async (context, next) =>
 });
 
 app.UseCors("FrontendOnly");
+app.UseResponseCompression();
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context =>
+    {
+        var path = context.File.Name ?? string.Empty;
+
+        // Hashed frontend bundles can be cached aggressively.
+        if (path.EndsWith(".js", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".css", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".woff2", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".ico", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Context.Response.Headers["Cache-Control"] = "public,max-age=31536000,immutable";
+            return;
+        }
+
+        if (path.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Context.Response.Headers["Cache-Control"] = "no-cache,no-store,must-revalidate";
+            context.Context.Response.Headers["Pragma"] = "no-cache";
+            context.Context.Response.Headers["Expires"] = "0";
+        }
+    }
+});
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -528,12 +667,22 @@ if (File.Exists(spaIndexFile))
         var html = spaIndexTemplate;
         html = ReplaceTitleTag(html, seo.Title);
         html = ReplaceMetaTagContent(html, "name", "description", seo.Description);
+        html = ReplaceMetaTagContent(
+            html,
+            "property",
+            "og:type",
+            Regex.IsMatch(normalizedPath, @"^/articles/\d+$", RegexOptions.IgnoreCase) ? "article" : "website"
+        );
         html = ReplaceMetaTagContent(html, "property", "og:title", seo.Title);
         html = ReplaceMetaTagContent(html, "property", "og:description", seo.Description);
         html = ReplaceMetaTagContent(html, "property", "og:url", canonicalUrl);
         html = ReplaceMetaTagContent(html, "name", "twitter:title", seo.Title);
         html = ReplaceMetaTagContent(html, "name", "twitter:description", seo.Description);
         html = ReplaceCanonicalHref(html, canonicalUrl);
+        html = UpsertRouteStructuredData(
+            html,
+            BuildRouteStructuredData(normalizedPath, canonicalUrl, seo.Title, seo.Description, siteUrl)
+        );
 
         context.Response.ContentType = "text/html; charset=utf-8";
         await context.Response.WriteAsync(html);

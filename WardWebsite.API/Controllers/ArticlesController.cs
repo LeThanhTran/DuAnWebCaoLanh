@@ -42,6 +42,33 @@ namespace WardWebsite.API.Controllers
             return WebUtility.HtmlDecode(withoutTags).Trim();
         }
 
+        private static string BuildSnippet(string html, int maxLength = 180)
+        {
+            var plainText = Regex.Replace(ExtractPlainText(html), @"\s+", " ").Trim();
+            if (string.IsNullOrWhiteSpace(plainText))
+            {
+                return string.Empty;
+            }
+
+            if (plainText.Length <= maxLength)
+            {
+                return plainText;
+            }
+
+            return plainText[..(maxLength - 3)].TrimEnd() + "...";
+        }
+
+        private static string ExtractFirstImageUrl(string? html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+            {
+                return string.Empty;
+            }
+
+            var match = Regex.Match(html, "<img[^>]+src=[\"'](?<src>[^\"']+)[\"'][^>]*>", RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups["src"].Value : string.Empty;
+        }
+
         private static string NormalizeStatus(string? status)
         {
             if (string.IsNullOrWhiteSpace(status))
@@ -94,16 +121,16 @@ namespace WardWebsite.API.Controllers
             if (pageSize < 1 || pageSize > 100) pageSize = 10;
 
             var query = _context.Articles
+                .AsNoTracking()
                 .Where(a => !a.IsDeleted)
-                .Include(a => a.Category)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
             {
-                var term = search.Trim().ToLower();
+                var term = $"%{search.Trim()}%";
                 query = query.Where(a =>
-                    a.Title.ToLower().Contains(term) ||
-                    a.Content.ToLower().Contains(term));
+                    EF.Functions.Like(a.Title, term) ||
+                    EF.Functions.Like(a.Content, term));
             }
 
             if (categoryId.HasValue && categoryId.Value > 0)
@@ -135,7 +162,6 @@ namespace WardWebsite.API.Controllers
                 {
                     a.Id,
                     a.Title,
-                    a.Content,
                     a.Status,
                     a.CreatedAt,
                     a.SubmittedAt,
@@ -145,7 +171,7 @@ namespace WardWebsite.API.Controllers
                     a.PublishedBy,
                     a.ViewCount,
                     CommentCount = a.Comments.Count(c => c.Status == "Approved"),
-                    Category = a.Category!.Name
+                    Category = a.Category != null ? a.Category.Name : string.Empty
                 })
                 .ToListAsync();
 
@@ -168,9 +194,9 @@ namespace WardWebsite.API.Controllers
             if (take < 1) take = 5;
             if (take > 10) take = 10;
 
-            var featured = await _context.Articles
+            var featuredRows = await _context.Articles
+                .AsNoTracking()
                 .Where(a => !a.IsDeleted && a.Status == "Published")
-                .Include(a => a.Category)
                 .Select(a => new
                 {
                     a.Id,
@@ -180,13 +206,28 @@ namespace WardWebsite.API.Controllers
                     a.PublishedAt,
                     a.ViewCount,
                     CommentCount = a.Comments.Count(c => c.Status == "Approved"),
-                    Category = a.Category!.Name
+                    Category = a.Category != null ? a.Category.Name : string.Empty
                 })
                 .OrderByDescending(a => a.ViewCount)
                 .ThenByDescending(a => a.CommentCount)
                 .ThenByDescending(a => a.PublishedAt ?? a.CreatedAt)
                 .Take(take)
                 .ToListAsync();
+
+            var featured = featuredRows
+                .Select(a => new
+                {
+                    a.Id,
+                    a.Title,
+                    Summary = BuildSnippet(a.Content, 180),
+                    ThumbnailUrl = ExtractFirstImageUrl(a.Content),
+                    a.CreatedAt,
+                    a.PublishedAt,
+                    a.ViewCount,
+                    a.CommentCount,
+                    a.Category
+                })
+                .ToList();
 
             return Ok(featured);
         }

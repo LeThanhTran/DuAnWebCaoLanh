@@ -197,7 +197,7 @@ export default function ArticleDetail({ onLoginSuccess }) {
 
           {/* Content */}
           <div
-            className="prose prose-lg max-w-none text-gray-700 leading-relaxed"
+            className="article-content prose prose-lg max-w-none text-gray-700 leading-relaxed"
             dangerouslySetInnerHTML={{
               __html: DOMPurify.sanitize(article.content || '')
             }}
