@@ -103,7 +103,8 @@ namespace WardWebsite.API.Controllers
                 var term = search.Trim().ToLower();
                 query = query.Where(a =>
                     a.Title.ToLower().Contains(term) ||
-                    a.Content.ToLower().Contains(term));
+                    a.Content.ToLower().Contains(term) ||
+                    a.Category!.Name.ToLower().Contains(term));
             }
 
             if (categoryId.HasValue && categoryId.Value > 0)
@@ -135,7 +136,9 @@ namespace WardWebsite.API.Controllers
                 {
                     a.Id,
                     a.Title,
-                    a.Content,
+                    Content = string.Empty,
+                    ContentPreview = string.Empty,
+                    ThumbnailUrl = string.Empty,
                     a.Status,
                     a.CreatedAt,
                     a.SubmittedAt,
@@ -175,7 +178,9 @@ namespace WardWebsite.API.Controllers
                 {
                     a.Id,
                     a.Title,
-                    a.Content,
+                    Content = string.Empty,
+                    ContentPreview = string.Empty,
+                    ThumbnailUrl = string.Empty,
                     a.CreatedAt,
                     a.PublishedAt,
                     a.ViewCount,

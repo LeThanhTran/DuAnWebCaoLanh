@@ -114,7 +114,7 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
 
     return articles.filter((article) => {
       const title = toSearchable(article.title)
-      const content = toSearchable(article.content)
+      const content = toSearchable(article.contentPreview || article.content)
       const category = toSearchable(article.category)
 
       const matchSearch =
@@ -138,12 +138,12 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
     return featuredArticles
       .map((article, index) => {
         const images = extractImageSources(article.content)
-        const summary = toPlainText(article.content)
+        const summary = toPlainText(article.contentPreview || article.content)
 
         return {
           ...article,
           rank: index + 1,
-          image: images[0] || '',
+          image: article.thumbnailUrl || images[0] || '',
           summary: summary.length > 180 ? `${summary.slice(0, 177)}...` : summary,
           viewCount: Number(article.viewCount || 0),
           commentCount: Number(article.commentCount || 0),
