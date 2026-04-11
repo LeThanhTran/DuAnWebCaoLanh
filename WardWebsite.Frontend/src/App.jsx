@@ -410,6 +410,7 @@ export default function App() {
               <div className="public-window-shell container mx-auto py-12 px-4">
                 <ContactPage
                   user={null}
+                  isAuthenticated={false}
                   onLoginSuccess={handleLoginSuccess}
                   requireLoginOnEnter={true}
                 />
@@ -444,7 +445,7 @@ export default function App() {
             path="/tra-cuu-ho-so"
             element={
               <div className="public-window-shell container mx-auto py-12 px-4">
-                <ApplicationLookup />
+                <ApplicationLookup isAuthenticated={false} />
               </div>
             }
           />
@@ -545,7 +546,12 @@ export default function App() {
           path="/contact"
           element={
             <div className="container mx-auto py-12 px-4">
-              <ContactPage user={user} onLoginSuccess={handleLoginSuccess} />
+              <ContactPage
+                user={user}
+                isAuthenticated={isLoggedIn}
+                onLoginSuccess={handleLoginSuccess}
+                onUnauthorized={handleLogout}
+              />
             </div>
           }
         />
@@ -591,7 +597,11 @@ export default function App() {
           path="/tra-cuu-ho-so"
           element={
             <div className="container mx-auto py-12 px-4">
-              <ApplicationLookup />
+              <ApplicationLookup
+                isAuthenticated={isLoggedIn}
+                user={user}
+                onUnauthorized={handleLogout}
+              />
             </div>
           }
         />

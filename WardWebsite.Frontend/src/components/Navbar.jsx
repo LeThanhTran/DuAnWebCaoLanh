@@ -6,6 +6,7 @@ export default function Navbar({ isLoggedIn, user, onLogout }) {
   const [isOpen, setIsOpen] = useState(false)
   const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false)
   const [isInfoMenuOpen, setIsInfoMenuOpen] = useState(false)
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -13,13 +14,14 @@ export default function Navbar({ isLoggedIn, user, onLogout }) {
     setIsOpen(false)
     setIsAdminMenuOpen(false)
     setIsInfoMenuOpen(false)
+    setIsProfileMenuOpen(false)
     navigate('/')
   }
 
   const primaryLinks = [
     { label: 'Tin tức', path: '/articles' },
     { label: 'Dịch vụ', path: '/services' },
-    { label: 'Tra cứu hồ sơ', path: '/tra-cuu-ho-so' },
+    ...(!isLoggedIn ? [{ label: 'Tra cứu hồ sơ', path: '/tra-cuu-ho-so' }] : []),
     { label: 'Biểu mẫu', path: '/bieu-mau' },
   ]
 
@@ -84,6 +86,7 @@ export default function Navbar({ isLoggedIn, user, onLogout }) {
                 onMouseEnter={() => {
                   setIsInfoMenuOpen(false)
                   setIsAdminMenuOpen(false)
+                  setIsProfileMenuOpen(false)
                 }}
               >
                 {link.label}
@@ -97,10 +100,12 @@ export default function Navbar({ isLoggedIn, user, onLogout }) {
                 onClick={() => {
                   setIsInfoMenuOpen((value) => !value)
                   setIsAdminMenuOpen(false)
+                  setIsProfileMenuOpen(false)
                 }}
                 onMouseEnter={() => {
                   setIsInfoMenuOpen(true)
                   setIsAdminMenuOpen(false)
+                  setIsProfileMenuOpen(false)
                 }}
               >
                 Thông tin ▾
@@ -132,10 +137,12 @@ export default function Navbar({ isLoggedIn, user, onLogout }) {
                   onClick={() => {
                     setIsAdminMenuOpen((v) => !v)
                     setIsInfoMenuOpen(false)
+                    setIsProfileMenuOpen(false)
                   }}
                   onMouseEnter={() => {
                     setIsAdminMenuOpen(true)
                     setIsInfoMenuOpen(false)
+                    setIsProfileMenuOpen(false)
                   }}
                 >
                   Quản trị ▾
@@ -165,29 +172,60 @@ export default function Navbar({ isLoggedIn, user, onLogout }) {
           <div className="hidden md:flex items-center space-x-4">
             {isLoggedIn ? (
               <>
-                <Link
-                  to="/ho-so-ca-nhan"
-                  className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg font-medium transition fx-button-pop"
-                >
-                  Hồ sơ
-                </Link>
-
                 <NotificationBell user={user} />
 
-                <div className="flex items-center space-x-2 bg-blue-500 px-4 py-2 rounded-lg">
-                  {user?.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt="Avatar"
-                      className="w-8 h-8 rounded-full object-cover border border-blue-200"
-                    />
-                  ) : (
-                    <span className="font-medium">👤</span>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg transition fx-button-pop"
+                    onClick={() => {
+                      setIsProfileMenuOpen((value) => !value)
+                      setIsInfoMenuOpen(false)
+                      setIsAdminMenuOpen(false)
+                    }}
+                    onMouseEnter={() => {
+                      setIsProfileMenuOpen(true)
+                      setIsInfoMenuOpen(false)
+                      setIsAdminMenuOpen(false)
+                    }}
+                  >
+                    {user?.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt="Avatar"
+                        className="w-8 h-8 rounded-full object-cover border border-blue-200"
+                      />
+                    ) : (
+                      <span className="font-medium">👤</span>
+                    )}
+                    <span className="font-medium">{user?.fullName || user?.username}</span>
+                    <span className="px-2 py-1 bg-blue-600 rounded text-xs font-bold">
+                      {user?.role}
+                    </span>
+                    <span className="text-xs" aria-hidden="true">▾</span>
+                  </button>
+
+                  {isProfileMenuOpen && (
+                    <div
+                      className="absolute right-0 mt-2 w-64 bg-white text-gray-800 rounded-lg shadow-xl border border-gray-200 z-50"
+                      onMouseLeave={() => setIsProfileMenuOpen(false)}
+                    >
+                      <Link
+                        to="/tra-cuu-ho-so"
+                        className="block px-4 py-2 hover:bg-blue-50"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                      >
+                        Hồ sơ đã gửi
+                      </Link>
+                      <Link
+                        to="/ho-so-ca-nhan"
+                        className="block px-4 py-2 hover:bg-blue-50"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                      >
+                        Thông tin cá nhân
+                      </Link>
+                    </div>
                   )}
-                  <span className="font-medium">{user?.fullName || user?.username}</span>
-                  <span className="px-2 py-1 bg-blue-600 rounded text-xs font-bold">
-                    {user?.role}
-                  </span>
                 </div>
                 <button
                   onClick={handleLogout}
@@ -266,10 +304,46 @@ export default function Navbar({ isLoggedIn, user, onLogout }) {
             <div className="border-t border-blue-500 pt-4 mt-4 px-4">
               {isLoggedIn ? (
                 <>
-                  <div className="mb-3 text-sm">
-                    <p className="font-medium">{user?.fullName || user?.username}</p>
-                    <p className="text-blue-200 text-xs">Vai trò: {user?.role}</p>
-                  </div>
+                  <details className="mb-3">
+                    <summary className="cursor-pointer rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-3 font-medium transition">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {user?.avatarUrl ? (
+                            <img
+                              src={user.avatarUrl}
+                              alt="Avatar"
+                              className="w-8 h-8 rounded-full object-cover border border-blue-200"
+                            />
+                          ) : (
+                            <span className="font-medium">👤</span>
+                          )}
+
+                          <div className="min-w-0 text-left">
+                            <p className="font-medium truncate">{user?.fullName || user?.username}</p>
+                            <p className="text-blue-200 text-xs truncate">Vai trò: {user?.role}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs text-blue-100">▾</span>
+                      </div>
+                    </summary>
+
+                    <div className="mt-2 space-y-1">
+                      <Link
+                        to="/tra-cuu-ho-so"
+                        onClick={() => setIsOpen(false)}
+                        className="block w-full text-center bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium transition"
+                      >
+                        Hồ sơ đã gửi
+                      </Link>
+                      <Link
+                        to="/ho-so-ca-nhan"
+                        onClick={() => setIsOpen(false)}
+                        className="block w-full text-center bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg font-medium transition"
+                      >
+                        Thông tin cá nhân
+                      </Link>
+                    </div>
+                  </details>
 
                   <div className="mb-3">
                     <NotificationBell
@@ -278,13 +352,6 @@ export default function Navbar({ isLoggedIn, user, onLogout }) {
                     />
                   </div>
 
-                  <Link
-                    to="/ho-so-ca-nhan"
-                    onClick={() => setIsOpen(false)}
-                    className="block w-full text-center bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg font-medium transition mb-2"
-                  >
-                    Hồ sơ cá nhân
-                  </Link>
                   <button
                     onClick={handleLogout}
                     className="w-full bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-medium transition"

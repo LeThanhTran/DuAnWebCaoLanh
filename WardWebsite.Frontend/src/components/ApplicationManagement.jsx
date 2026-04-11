@@ -131,7 +131,8 @@ export default function ApplicationManagement() {
       pending: applications.filter((x) => x.status === 'Pending').length,
       processing: applications.filter((x) => x.status === 'Processing').length,
       approved: applications.filter((x) => x.status === 'Approved').length,
-      rejected: applications.filter((x) => x.status === 'Rejected').length
+      rejected: applications.filter((x) => x.status === 'Rejected').length,
+      pendingInfo: applications.filter((x) => x.status === 'PendingInfo').length
     };
   }, [applications]);
 
@@ -212,7 +213,7 @@ export default function ApplicationManagement() {
         <p className="text-slate-200 mt-1">Theo dõi trạng thái hồ sơ và xử lý theo từng bước chuyên nghiệp.</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
           <p className="text-xs uppercase text-gray-500">Tổng hồ sơ</p>
           <p className="text-2xl font-bold text-gray-900">{summary.total}</p>
@@ -232,6 +233,10 @@ export default function ApplicationManagement() {
         <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
           <p className="text-xs uppercase text-gray-500">Từ chối</p>
           <p className="text-2xl font-bold text-red-600">{summary.rejected}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+          <p className="text-xs uppercase text-gray-500">Chờ bổ sung</p>
+          <p className="text-2xl font-bold text-violet-600">{summary.pendingInfo}</p>
         </div>
       </div>
 

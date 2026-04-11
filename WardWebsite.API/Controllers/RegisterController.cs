@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WardWebsite.API.Data;
 using WardWebsite.API.Models;
+using WardWebsite.API.Common;
 using BCrypt.Net;
 using System.Net.Mail;
 
@@ -59,6 +60,11 @@ namespace WardWebsite.API.Controllers
                     return BadRequest(new { message = "Email không hợp lệ" });
                 }
 
+                if (!PhoneNumberHelper.TryNormalizeVietnamPhone(phoneNumber, out var normalizedPhoneNumber))
+                {
+                    return BadRequest(new { message = "Số điện thoại không hợp lệ. Vui lòng nhập số di động Việt Nam (10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09)." });
+                }
+
                 // Check if username exists
                 var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
                 if (existingUser != null)
@@ -70,7 +76,7 @@ namespace WardWebsite.API.Controllers
                     return BadRequest(new { message = "Email đã được sử dụng" });
                 }
 
-                var existingPhone = await _context.Users.AnyAsync(u => u.PhoneNumber == phoneNumber);
+                var existingPhone = await _context.Users.AnyAsync(u => u.PhoneNumber == normalizedPhoneNumber);
                 if (existingPhone)
                 {
                     return BadRequest(new { message = "Số điện thoại đã được sử dụng" });
@@ -84,7 +90,7 @@ namespace WardWebsite.API.Controllers
                     PasswordHash = passwordHash,
                     FullName = fullName,
                     Email = email,
-                    PhoneNumber = phoneNumber,
+                    PhoneNumber = normalizedPhoneNumber,
                     Address = address,
                     CreatedAt = now,
                     UpdatedAt = now,

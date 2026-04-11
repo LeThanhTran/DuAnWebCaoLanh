@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using WardWebsite.API.Common;
 using WardWebsite.API.Data;
 using WardWebsite.API.Models;
 using WardWebsite.API.Repositories;
@@ -109,7 +110,17 @@ namespace WardWebsite.API.Controllers
                 if (string.IsNullOrWhiteSpace(dto.FullName) || string.IsNullOrWhiteSpace(dto.Phone) || dto.ServiceId <= 0)
                     return BadRequest(new { success = false, message = "Vui lòng điền đầy đủ thông tin" });
 
+                if (!PhoneNumberHelper.TryNormalizeVietnamPhone(dto.Phone, out var normalizedPhoneNumber))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Số điện thoại không hợp lệ. Vui lòng nhập số di động Việt Nam (10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09)."
+                    });
+                }
+
                 dto.CreatedByUsername = creatorUsername;
+                dto.Phone = normalizedPhoneNumber;
 
                 var application = await _repository.CreateApplicationAsync(dto);
 
@@ -184,6 +195,83 @@ namespace WardWebsite.API.Controllers
             });
         }
 
+        // GET: api/applications/my
+        // List applications submitted by currently logged in account
+        [HttpGet("my")]
+        [Authorize(Roles = "Admin,Editor,Viewer")]
+        public async Task<ActionResult> GetMyApplications(
+            [FromQuery] string? status = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
+        {
+            var username = User?.Identity?.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return Unauthorized(new { success = false, message = "Không xác định được tài khoản đăng nhập" });
+            }
+
+            if (page < 1) page = 1;
+            if (pageSize < 1 || pageSize > 100) pageSize = 10;
+
+            var validStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Pending",
+                "Processing",
+                "Approved",
+                "Rejected",
+                "PendingInfo"
+            };
+
+            if (!string.IsNullOrWhiteSpace(status) && !validStatuses.Contains(status))
+            {
+                return BadRequest(new { success = false, message = "Trạng thái không hợp lệ" });
+            }
+
+            var query = _context.Applications
+                .AsNoTracking()
+                .Include(a => a.Service)
+                .Where(a => a.CreatedByUsername == username);
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                query = query.Where(a => a.Status == status);
+            }
+
+            var total = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(a => a.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(a => new ApplicationDto
+                {
+                    Id = a.Id,
+                    LookupCode = a.LookupCode,
+                    CreatedByUsername = a.CreatedByUsername,
+                    FullName = a.FullName,
+                    Phone = a.Phone,
+                    Address = a.Address,
+                    ServiceId = a.ServiceId,
+                    ServiceName = a.Service != null ? a.Service.Name : string.Empty,
+                    Status = a.Status,
+                    Notes = a.Notes,
+                    CreatedAt = a.CreatedAt
+                })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                success = true,
+                data = items,
+                pagination = new
+                {
+                    currentPage = page,
+                    pageSize,
+                    total,
+                    totalPages = (total + pageSize - 1) / pageSize
+                }
+            });
+        }
+
         // POST: api/applications/lookup
         // Public endpoint for citizen to lookup application status
         [HttpPost("lookup")]
@@ -193,6 +281,20 @@ namespace WardWebsite.API.Controllers
             if (dto == null || (string.IsNullOrWhiteSpace(dto.LookupCode) && string.IsNullOrWhiteSpace(dto.Phone)))
             {
                 return BadRequest(new { success = false, message = "Vui lòng nhập ít nhất mã tra cứu hoặc số điện thoại" });
+            }
+
+            if (!string.IsNullOrWhiteSpace(dto.Phone))
+            {
+                if (!PhoneNumberHelper.TryNormalizeVietnamPhone(dto.Phone, out var normalizedLookupPhone))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Số điện thoại không hợp lệ. Vui lòng nhập số di động Việt Nam (10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09)."
+                    });
+                }
+
+                dto.Phone = normalizedLookupPhone;
             }
 
             var applications = await _repository.LookupApplicationsAsync(dto.LookupCode, dto.Phone);

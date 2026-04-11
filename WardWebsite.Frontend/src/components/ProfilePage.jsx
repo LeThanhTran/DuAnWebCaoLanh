@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { changeMyPassword, getMyProfile, updateMyProfile, uploadMyAvatar } from '../services/profileService'
+import { validateVietnamPhone } from '../utils/phone'
 
 const initialProfileForm = {
   fullName: '',
@@ -67,9 +68,20 @@ export default function ProfilePage({ user, onUserUpdated }) {
     event.preventDefault()
     setProfileMessage({ type: '', text: '' })
 
+    const phoneValidation = validateVietnamPhone(profileForm.phoneNumber, { required: false })
+    if (!phoneValidation.isValid) {
+      setProfileMessage({ type: 'error', text: phoneValidation.message })
+      return
+    }
+
+    const payload = {
+      ...profileForm,
+      phoneNumber: phoneValidation.normalized
+    }
+
     try {
       setProfileSaving(true)
-      const result = await updateMyProfile(profileForm)
+      const result = await updateMyProfile(payload)
       setProfile(result.profile)
 
       if (result.user && onUserUpdated) {
@@ -266,6 +278,7 @@ export default function ProfilePage({ user, onUserUpdated }) {
                 onChange={(event) => setProfileForm({ ...profileForm, phoneNumber: event.target.value })}
                 className="pf-input"
                 placeholder="09xxxxxxxx"
+                inputMode="numeric"
               />
             </div>
 

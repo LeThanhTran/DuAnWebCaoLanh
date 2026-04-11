@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using WardWebsite.API.Common;
 using WardWebsite.API.Data;
 using WardWebsite.API.Models;
 
@@ -28,11 +29,24 @@ namespace WardWebsite.API.Controllers
                 return BadRequest(new { success = false, message = "Vui lòng điền đầy đủ thông tin bắt buộc" });
             }
 
+            var normalizedPhoneNumber = string.Empty;
+            if (!string.IsNullOrWhiteSpace(dto.Phone))
+            {
+                if (!PhoneNumberHelper.TryNormalizeVietnamPhone(dto.Phone, out normalizedPhoneNumber))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Số điện thoại không hợp lệ. Vui lòng nhập số di động Việt Nam (10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09)."
+                    });
+                }
+            }
+
             var entity = new ContactMessage
             {
                 Name = dto.Name.Trim(),
                 Email = dto.Email.Trim(),
-                Phone = dto.Phone?.Trim() ?? string.Empty,
+                Phone = normalizedPhoneNumber,
                 Message = dto.Message.Trim(),
                 CreatedAt = DateTime.UtcNow,
                 IsHandled = false

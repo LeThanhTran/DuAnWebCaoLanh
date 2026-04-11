@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
 import { Eye, EyeOff } from 'lucide-react'
+import { validateVietnamPhone } from '../utils/phone'
 
 export default function RegisterForm({ onRegisterSuccess }) {
   const [form, setForm] = useState({
@@ -38,8 +39,9 @@ export default function RegisterForm({ onRegisterSuccess }) {
       return
     }
 
-    if (form.phoneNumber.length < 9) {
-      setError('Số điện thoại không hợp lệ')
+    const phoneValidation = validateVietnamPhone(form.phoneNumber, { required: true })
+    if (!phoneValidation.isValid) {
+      setError(phoneValidation.message)
       return
     }
 
@@ -59,7 +61,7 @@ export default function RegisterForm({ onRegisterSuccess }) {
         username: form.username,
         fullName: form.fullName,
         email: form.email,
-        phoneNumber: form.phoneNumber,
+        phoneNumber: phoneValidation.normalized,
         address: form.address,
         password: form.password,
         confirmPassword: form.passwordConfirm
@@ -177,6 +179,7 @@ export default function RegisterForm({ onRegisterSuccess }) {
                     onChange={handleChange}
                     placeholder="09xxxxxxxx"
                     className="register-input"
+                    inputMode="numeric"
                   />
                 </div>
 

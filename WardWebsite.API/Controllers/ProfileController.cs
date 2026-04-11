@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using WardWebsite.API.Common;
 using WardWebsite.API.Data;
 using WardWebsite.API.Models;
 using WardWebsite.API.Services.Storage;
@@ -58,9 +59,20 @@ namespace WardWebsite.API.Controllers
                 return Unauthorized(new { message = "Phiên đăng nhập không hợp lệ" });
             }
 
+            string? normalizedPhoneNumber = null;
+            if (!string.IsNullOrWhiteSpace(dto.PhoneNumber))
+            {
+                if (!PhoneNumberHelper.TryNormalizeVietnamPhone(dto.PhoneNumber, out var parsedPhoneNumber))
+                {
+                    return BadRequest(new { message = "Số điện thoại không hợp lệ. Vui lòng nhập số di động Việt Nam (10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09)." });
+                }
+
+                normalizedPhoneNumber = parsedPhoneNumber;
+            }
+
             user.FullName = NormalizeOptional(dto.FullName, 150);
             user.Email = NormalizeOptional(dto.Email, 150);
-            user.PhoneNumber = NormalizeOptional(dto.PhoneNumber, 30);
+            user.PhoneNumber = normalizedPhoneNumber;
             user.Address = NormalizeOptional(dto.Address, 300);
             user.UpdatedAt = DateTime.UtcNow;
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { Eye, EyeOff } from 'lucide-react'
+import { validateVietnamPhone } from '../utils/phone'
 
 const REMEMBER_LOGIN_KEY = 'remembered_login_credentials'
 
@@ -126,8 +127,9 @@ export default function LoginForm({ onLoginSuccess, loginSuccessOptions = {} }) 
       return
     }
 
-    if (forgotForm.phoneNumber.trim().length < 9) {
-      setForgotError('Số điện thoại không hợp lệ')
+    const phoneValidation = validateVietnamPhone(forgotForm.phoneNumber, { required: true })
+    if (!phoneValidation.isValid) {
+      setForgotError(phoneValidation.message)
       return
     }
 
@@ -146,7 +148,7 @@ export default function LoginForm({ onLoginSuccess, loginSuccessOptions = {} }) 
       const response = await axios.post('/api/auth/forgot-password', {
         identifier: forgotForm.identifier.trim(),
         email: forgotForm.email.trim(),
-        phoneNumber: forgotForm.phoneNumber.trim(),
+        phoneNumber: phoneValidation.normalized,
         newPassword: forgotForm.newPassword,
         confirmNewPassword: forgotForm.confirmNewPassword
       })
@@ -289,6 +291,7 @@ export default function LoginForm({ onLoginSuccess, loginSuccessOptions = {} }) 
                   onChange={(e) => updateForgotField('phoneNumber', e.target.value)}
                   className="auth-input"
                   placeholder="09xxxxxxxx"
+                  inputMode="numeric"
                 />
               </div>
             </div>

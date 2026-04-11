@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
+using WardWebsite.API.Common;
 using WardWebsite.API.Models;
 using WardWebsite.API.Data;
 
@@ -162,13 +163,17 @@ namespace WardWebsite.API.Repositories
             }
 
             var lookupCode = await GenerateLookupCodeAsync();
+            if (!PhoneNumberHelper.TryNormalizeVietnamPhone(dto.Phone, out var normalizedPhoneNumber))
+            {
+                throw new InvalidOperationException("Số điện thoại không hợp lệ");
+            }
 
             var application = new Application
             {
                 LookupCode = lookupCode,
                 CreatedByUsername = string.IsNullOrWhiteSpace(dto.CreatedByUsername) ? string.Empty : dto.CreatedByUsername.Trim(),
                 FullName = dto.FullName.Trim(),
-                Phone = dto.Phone.Trim(),
+                Phone = normalizedPhoneNumber,
                 Address = dto.Address.Trim(),
                 ServiceId = dto.ServiceId,
                 Status = "Pending",
@@ -202,7 +207,7 @@ namespace WardWebsite.API.Repositories
 
             var normalizedPhone = string.IsNullOrWhiteSpace(phone)
                 ? null
-                : phone.Trim();
+                : PhoneNumberHelper.Normalize(phone);
 
             var query = _context.Applications
                 .Include(a => a.Service)
@@ -244,7 +249,7 @@ namespace WardWebsite.API.Repositories
             }
 
             var normalizedLookupCode = normalizedKeyword.ToUpperInvariant();
-            var normalizedPhone = new string(normalizedKeyword.Where(char.IsDigit).ToArray());
+            var normalizedPhone = PhoneNumberHelper.Normalize(normalizedKeyword);
             var safeLimit = Math.Clamp(limit, 1, 20);
 
             var query = _context.Applications

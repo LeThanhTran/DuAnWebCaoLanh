@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Mail;
 using System.Security.Claims;
+using WardWebsite.API.Common;
 using WardWebsite.API.Data;
 using WardWebsite.API.Models;
 
@@ -37,6 +38,7 @@ namespace WardWebsite.API.Controllers
 
             var loginIdentifier = dto.Username.Trim();
             var emailIdentifier = loginIdentifier.ToLowerInvariant();
+            var phoneIdentifier = PhoneNumberHelper.Normalize(loginIdentifier);
 
             // 2. Tìm user trong database
             var user = await _context.Users
@@ -44,7 +46,7 @@ namespace WardWebsite.API.Controllers
                 .FirstOrDefaultAsync(u =>
                     u.Username == loginIdentifier
                     || (u.Email != null && u.Email == emailIdentifier)
-                    || (u.PhoneNumber != null && u.PhoneNumber == loginIdentifier));
+                    || (u.PhoneNumber != null && u.PhoneNumber == phoneIdentifier));
 
             if (user == null)
             {
@@ -101,6 +103,7 @@ namespace WardWebsite.API.Controllers
             var identifier = dto.Identifier?.Trim();
             var email = dto.Email?.Trim().ToLowerInvariant();
             var phoneNumber = dto.PhoneNumber?.Trim();
+            var normalizedIdentifierPhone = PhoneNumberHelper.Normalize(identifier);
 
             if (string.IsNullOrWhiteSpace(identifier)
                 || string.IsNullOrWhiteSpace(email)
@@ -120,6 +123,15 @@ namespace WardWebsite.API.Controllers
                 return BadRequest(new { success = false, message = "Email không hợp lệ" });
             }
 
+            if (!PhoneNumberHelper.TryNormalizeVietnamPhone(phoneNumber, out var normalizedPhoneNumber))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Số điện thoại không hợp lệ. Vui lòng nhập số di động Việt Nam (10 số, bắt đầu bằng 03, 05, 07, 08 hoặc 09)."
+                });
+            }
+
             if (dto.NewPassword.Length < 6)
             {
                 return BadRequest(new { success = false, message = "Mật khẩu mới phải có ít nhất 6 ký tự" });
@@ -133,7 +145,7 @@ namespace WardWebsite.API.Controllers
             var user = await _context.Users.FirstOrDefaultAsync(u =>
                 u.Username == identifier
                 || (u.Email != null && u.Email == identifier.ToLowerInvariant())
-                || (u.PhoneNumber != null && u.PhoneNumber == identifier));
+                || (u.PhoneNumber != null && u.PhoneNumber == normalizedIdentifierPhone));
 
             if (user == null)
             {
@@ -144,7 +156,7 @@ namespace WardWebsite.API.Controllers
             var userPhone = user.PhoneNumber?.Trim() ?? string.Empty;
 
             if (!string.Equals(userEmail, email, StringComparison.Ordinal)
-                || !string.Equals(userPhone, phoneNumber, StringComparison.Ordinal))
+                || !string.Equals(userPhone, normalizedPhoneNumber, StringComparison.Ordinal))
             {
                 return BadRequest(new
                 {

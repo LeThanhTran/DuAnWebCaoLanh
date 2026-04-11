@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import AuthActionLoginModal from './AuthActionLoginModal'
+import { validateVietnamPhone } from '../utils/phone'
 
-export default function ContactPage({ user = null, onLoginSuccess, requireLoginOnEnter = false }) {
+export default function ContactPage({
+  user = null,
+  isAuthenticated = false,
+  onLoginSuccess,
+  onUnauthorized,
+  requireLoginOnEnter = false
+}) {
   const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' })
   const [submitted, setSubmitted] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
-  const isLoggedIn = Boolean(localStorage.getItem('token'))
+  const token = localStorage.getItem('token')
+  const isLoggedIn = Boolean(isAuthenticated && token)
 
   useEffect(() => {
     if (!user) {
@@ -41,12 +49,22 @@ export default function ContactPage({ user = null, onLoginSuccess, requireLoginO
 
     if (!form.name || !form.email || !form.message) return
 
+    const phoneValidation = validateVietnamPhone(form.phone, { required: false })
+    if (!phoneValidation.isValid) {
+      alert(phoneValidation.message)
+      return
+    }
+
     try {
       await axios.post('/api/contactmessages', {
         name: form.name,
         email: form.email,
-        phone: form.phone,
+        phone: phoneValidation.normalized || null,
         message: form.message
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
       })
       setSubmitted(true)
       setForm((previous) => ({
@@ -57,8 +75,7 @@ export default function ContactPage({ user = null, onLoginSuccess, requireLoginO
     } catch (error) {
       const status = error?.response?.status
       if (status === 401 || status === 403) {
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
+        onUnauthorized?.()
         setShowLoginModal(true)
         return
       }
@@ -198,6 +215,7 @@ export default function ContactPage({ user = null, onLoginSuccess, requireLoginO
                     onChange={handleChange}
                     placeholder="Nhập số điện thoại"
                     className="contact-input"
+                    inputMode="numeric"
                   />
                 </div>
               </div>

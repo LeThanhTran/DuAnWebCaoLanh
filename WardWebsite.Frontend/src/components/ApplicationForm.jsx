@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Send, Loader } from 'lucide-react';
 import axios from 'axios';
 import applicationAPI from '../services/applicationAPI';
+import { validateVietnamPhone } from '../utils/phone';
 
 export default function ApplicationForm({ service = null, onBack = null }) {
   const [services, setServices] = useState([]);
@@ -46,6 +47,13 @@ export default function ApplicationForm({ service = null, onBack = null }) {
       alert('Vui lòng nhập số điện thoại');
       return;
     }
+
+    const phoneValidation = validateVietnamPhone(formData.phone, { required: true });
+    if (!phoneValidation.isValid) {
+      alert(phoneValidation.message);
+      return;
+    }
+
     if (!formData.address.trim()) {
       alert('Vui lòng nhập địa chỉ');
       return;
@@ -65,12 +73,13 @@ export default function ApplicationForm({ service = null, onBack = null }) {
       setLoading(true);
       const result = await applicationAPI.createApplication({
         ...formData,
+        phone: phoneValidation.normalized,
         serviceId: parsedServiceId
       });
 
       setSubmissionInfo({
         lookupCode: result?.lookup?.lookupCode || result?.data?.lookupCode || '',
-        phone: result?.lookup?.phone || formData.phone
+        phone: result?.lookup?.phone || phoneValidation.normalized
       });
 
       setSubmitted(true);
@@ -159,6 +168,7 @@ export default function ApplicationForm({ service = null, onBack = null }) {
             placeholder="0912345678"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={loading}
+            inputMode="numeric"
           />
         </div>
 

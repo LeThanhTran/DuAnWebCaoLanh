@@ -3,6 +3,42 @@ import axios from 'axios';
 const API_BASE_URL = '/api';
 
 const applicationAPI = {
+  getMyApplications: async ({ status = null, page = 1, pageSize = 10 } = {}) => {
+    try {
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+      if (status && status !== 'ALL') {
+        params.append('status', status);
+      }
+
+      const response = await axios.get(`${API_BASE_URL}/applications/my?${params.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
+      return {
+        data: response.data?.data || [],
+        pagination: response.data?.pagination || {}
+      };
+    } catch (error) {
+      console.error('Error fetching my applications:', error);
+      throw error;
+    }
+  },
+
+  getMyApplicationSummary: async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/applications/my-summary`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
+      return response.data?.data || null;
+    } catch (error) {
+      console.error('Error fetching my application summary:', error);
+      throw error;
+    }
+  },
+
   // Get all pending applications
   getPendingApplications: async () => {
     try {
