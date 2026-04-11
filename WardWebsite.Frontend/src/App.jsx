@@ -20,7 +20,6 @@ import ApplicationManagement from './components/ApplicationManagement'
 import ApplicationLookup from './components/ApplicationLookup'
 import PermissionMatrixPanel from './components/PermissionMatrixPanel'
 import ContactMessagesAdmin from './components/ContactMessagesAdmin'
-import ContactMessagesBubble from './components/ContactMessagesBubble'
 import AdminActivityLog from './components/AdminActivityLog'
 import HomeBannerEditor from './components/HomeBannerEditor'
 import HomeIntroEditor from './components/HomeIntroEditor'
@@ -144,6 +143,29 @@ const ensureCanonicalTag = () => {
   return element
 }
 
+const resolveSafeRedirectPath = (value) => {
+  if (!value) {
+    return ''
+  }
+
+  let candidate = String(value)
+  try {
+    candidate = decodeURIComponent(candidate)
+  } catch {
+    candidate = String(value)
+  }
+
+  if (!candidate.startsWith('/')) {
+    return ''
+  }
+
+  if (candidate.startsWith('//')) {
+    return ''
+  }
+
+  return candidate
+}
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [user, setUser] = useState(null)
@@ -225,7 +247,13 @@ export default function App() {
       return
     }
 
-    navigate(getAuthenticatedLandingPath(userData), { replace: true })
+    const redirectFromOptions = resolveSafeRedirectPath(options.redirectTo || options.redirectPath)
+    const redirectFromQuery = location.pathname === '/'
+      ? resolveSafeRedirectPath(new URLSearchParams(location.search).get('redirect'))
+      : ''
+
+    const targetPath = redirectFromOptions || redirectFromQuery || getAuthenticatedLandingPath(userData)
+    navigate(targetPath, { replace: true })
   }
 
   const handleLogout = () => {
@@ -380,7 +408,11 @@ export default function App() {
             path="/contact"
             element={
               <div className="public-window-shell container mx-auto py-12 px-4">
-                <ContactPage />
+                <ContactPage
+                  user={null}
+                  onLoginSuccess={handleLoginSuccess}
+                  requireLoginOnEnter={true}
+                />
               </div>
             }
           />
@@ -389,7 +421,7 @@ export default function App() {
             path="/services"
             element={
               <div className="public-window-shell container mx-auto py-12 px-4">
-                <ServiceList isLoggedIn={false} />
+                <ServiceList isLoggedIn={false} onLoginSuccess={handleLoginSuccess} />
               </div>
             }
           />
@@ -513,7 +545,7 @@ export default function App() {
           path="/contact"
           element={
             <div className="container mx-auto py-12 px-4">
-              <ContactPage />
+              <ContactPage user={user} onLoginSuccess={handleLoginSuccess} />
             </div>
           }
         />
@@ -545,7 +577,7 @@ export default function App() {
           path="/services"
           element={
             <div className="container mx-auto py-12 px-4">
-              <ServiceList isLoggedIn={true} />
+              <ServiceList isLoggedIn={true} onLoginSuccess={handleLoginSuccess} />
             </div>
           }
         />
@@ -722,7 +754,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
-      <ContactMessagesBubble />
     </>
   )
 }

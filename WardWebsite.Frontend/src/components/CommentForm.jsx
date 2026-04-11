@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createComment } from '../services/articleService'
-import LoginForm from './LoginForm'
+import AuthActionLoginModal from './AuthActionLoginModal'
 
 export default function CommentForm({ articleId, onCommentCreated, onLoginSuccess }) {
   const [content, setContent] = useState('')
@@ -96,27 +96,13 @@ export default function CommentForm({ articleId, onCommentCreated, onLoginSucces
         </form>
       </div>
 
-      {showLoginModal && !isLoggedIn && (
-        <div className="fixed inset-0 z-[80] bg-black/55 px-4 py-6 flex items-center justify-center">
-          <div className="w-full max-w-4xl relative">
-            <button
-              type="button"
-              onClick={closeLoginModal}
-              className="absolute right-3 top-3 z-10 w-9 h-9 rounded-full bg-slate-900/85 text-white text-lg leading-none hover:bg-slate-800"
-              aria-label="Đóng cửa sổ đăng nhập"
-            >
-              ×
-            </button>
-
-            <div className="max-h-[92vh] overflow-y-auto rounded-xl">
-              <LoginForm
-                onLoginSuccess={handleLoginSuccess}
-                loginSuccessOptions={{ stayOnCurrentPath: true }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <AuthActionLoginModal
+        open={showLoginModal && !isLoggedIn}
+        actionLabel="bình luận"
+        onClose={closeLoginModal}
+        onLoginSuccess={handleLoginSuccess}
+        loginSuccessOptions={{ stayOnCurrentPath: true }}
+      />
     </>
   )
 }

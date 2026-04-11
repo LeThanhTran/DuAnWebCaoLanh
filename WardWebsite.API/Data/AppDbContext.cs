@@ -14,6 +14,7 @@ namespace WardWebsite.API.Data
         public DbSet<Article> Articles { get; set; }
         public DbSet<Category> Categories { get; set; }
         public DbSet<Comment> Comments { get; set; }
+        public DbSet<CommentReaction> CommentReactions { get; set; }
         public DbSet<Service> Services { get; set; }
         public DbSet<Application> Applications { get; set; }
         public DbSet<DownloadForm> DownloadForms { get; set; }
@@ -162,6 +163,38 @@ namespace WardWebsite.API.Data
                 .Property(c => c.CreatedByUsername)
                 .HasMaxLength(100);
 
+            modelBuilder.Entity<Comment>()
+                .Property(c => c.LikeCount)
+                .HasDefaultValue(0);
+
+            modelBuilder.Entity<Comment>()
+                .Property(c => c.DislikeCount)
+                .HasDefaultValue(0);
+
+            modelBuilder.Entity<Comment>()
+                .HasOne(c => c.ParentComment)
+                .WithMany(c => c.Replies)
+                .HasForeignKey(c => c.ParentCommentId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<CommentReaction>()
+                .Property(r => r.Username)
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<CommentReaction>()
+                .Property(r => r.ReactionType)
+                .HasMaxLength(20);
+
+            modelBuilder.Entity<CommentReaction>()
+                .HasOne(r => r.Comment)
+                .WithMany(c => c.Reactions)
+                .HasForeignKey(r => r.CommentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<CommentReaction>()
+                .HasIndex(r => new { r.CommentId, r.Username })
+                .IsUnique();
+
             // Seed services
             modelBuilder.Entity<Service>().HasData(
                 new Service { Id = 1, Name = "Cấp CCCD", Description = "Dịch vụ cấp căn cước công dân" },
@@ -206,6 +239,10 @@ namespace WardWebsite.API.Data
             modelBuilder.Entity<Application>()
                 .Property(app => app.LookupCode)
                 .HasMaxLength(40);
+
+            modelBuilder.Entity<Application>()
+                .Property(app => app.CreatedByUsername)
+                .HasMaxLength(100);
 
             modelBuilder.Entity<Application>()
                 .Property(app => app.Status)

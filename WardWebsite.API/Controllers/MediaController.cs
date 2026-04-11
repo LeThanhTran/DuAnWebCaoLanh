@@ -104,9 +104,50 @@ namespace WardWebsite.API.Controllers
                 : _environment.WebRootPath;
         }
 
+        private string GetPersistentUploadsRootPath()
+        {
+            var homePath = Environment.GetEnvironmentVariable("HOME");
+            if (!string.IsNullOrWhiteSpace(homePath))
+            {
+                return Path.Combine(homePath, "site", "uploads");
+            }
+
+            return Path.Combine(_environment.ContentRootPath, "App_Data", "uploads");
+        }
+
+        private string GetMediaDirectoryPath()
+        {
+            var candidates = new[]
+            {
+                Path.Combine(GetPersistentUploadsRootPath(), "media"),
+                Path.Combine(GetWebRootPath(), "uploads", "media")
+            };
+
+            foreach (var candidate in candidates)
+            {
+                try
+                {
+                    Directory.CreateDirectory(candidate);
+                    return candidate;
+                }
+                catch
+                {
+                    // Try next candidate path.
+                }
+            }
+
+            return Path.Combine(_environment.ContentRootPath, "App_Data", "uploads", "media");
+        }
+
         private static bool IsLocalMediaPath(string path)
         {
             return path.StartsWith("/uploads/media/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ExtractMediaFileName(string path)
+        {
+            var cleanPath = path.Split('?', '#')[0];
+            return Path.GetFileName(cleanPath);
         }
 
         private string BuildSiteAbsoluteUrl(string path)
@@ -147,47 +188,98 @@ namespace WardWebsite.API.Controllers
             {
                 media.Id,
                 Url = NormalizeMediaUrl(media.Url),
-                media.Type
+                media.Type,
+                IsAvailable = IsLocalMediaAvailable(media.Url)
             };
+        }
+
+        private bool IsLocalMediaAvailable(string? mediaUrl)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(mediaUrl))
+                {
+                    return false;
+                }
+
+                string mediaPath;
+                if (Uri.TryCreate(mediaUrl, UriKind.Absolute, out var uri))
+                {
+                    mediaPath = uri.AbsolutePath;
+                }
+                else
+                {
+                    mediaPath = mediaUrl.StartsWith('/') ? mediaUrl : $"/{mediaUrl}";
+                }
+
+                if (!IsLocalMediaPath(mediaPath))
+                {
+                    return true;
+                }
+
+                var fileName = ExtractMediaFileName(mediaPath);
+                if (string.IsNullOrWhiteSpace(fileName))
+                {
+                    return false;
+                }
+
+                var persistentPath = Path.Combine(GetMediaDirectoryPath(), fileName);
+                if (System.IO.File.Exists(persistentPath))
+                {
+                    return true;
+                }
+
+                var legacyPath = Path.Combine(GetWebRootPath(), "uploads", "media", fileName);
+                return System.IO.File.Exists(legacyPath);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void TryDeleteLocalMediaFile(string? mediaUrl)
         {
-            if (string.IsNullOrWhiteSpace(mediaUrl))
-            {
-                return;
-            }
-
-            string mediaPath;
-            if (Uri.TryCreate(mediaUrl, UriKind.Absolute, out var uri))
-            {
-                mediaPath = uri.AbsolutePath;
-            }
-            else
-            {
-                mediaPath = mediaUrl.StartsWith('/') ? mediaUrl : $"/{mediaUrl}";
-            }
-
-            if (!IsLocalMediaPath(mediaPath))
-            {
-                return;
-            }
-
-            var webRootPath = GetWebRootPath();
-            var uploadsRoot = Path.GetFullPath(Path.Combine(webRootPath, "uploads", "media"));
-            var relativePath = mediaPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-            var fullPath = Path.GetFullPath(Path.Combine(webRootPath, relativePath));
-
-            if (!fullPath.StartsWith(uploadsRoot, StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-
             try
             {
-                if (System.IO.File.Exists(fullPath))
+                if (string.IsNullOrWhiteSpace(mediaUrl))
                 {
-                    System.IO.File.Delete(fullPath);
+                    return;
+                }
+
+                string mediaPath;
+                if (Uri.TryCreate(mediaUrl, UriKind.Absolute, out var uri))
+                {
+                    mediaPath = uri.AbsolutePath;
+                }
+                else
+                {
+                    mediaPath = mediaUrl.StartsWith('/') ? mediaUrl : $"/{mediaUrl}";
+                }
+
+                if (!IsLocalMediaPath(mediaPath))
+                {
+                    return;
+                }
+
+                var fileName = ExtractMediaFileName(mediaPath);
+                if (string.IsNullOrWhiteSpace(fileName))
+                {
+                    return;
+                }
+
+                var candidatePaths = new[]
+                {
+                    Path.Combine(GetMediaDirectoryPath(), fileName),
+                    Path.Combine(GetWebRootPath(), "uploads", "media", fileName)
+                };
+
+                foreach (var fullPath in candidatePaths)
+                {
+                    if (System.IO.File.Exists(fullPath))
+                    {
+                        System.IO.File.Delete(fullPath);
+                    }
                 }
             }
             catch
@@ -243,6 +335,26 @@ namespace WardWebsite.API.Controllers
                     .OrderByDescending(m => m.Id)
                     .FirstOrDefaultAsync()
                 : null;
+
+            if (banner != null && !IsLocalMediaAvailable(banner.Url))
+            {
+                banner = null;
+            }
+
+            if (intro != null && !IsLocalMediaAvailable(intro.Url))
+            {
+                intro = null;
+            }
+
+            if (featuredVideo != null && !IsLocalMediaAvailable(featuredVideo.Url))
+            {
+                featuredVideo = null;
+            }
+
+            if (fallbackVideo != null && !IsLocalMediaAvailable(fallbackVideo.Url))
+            {
+                fallbackVideo = null;
+            }
 
             var homepageLayout = ReadHomepageLayout();
 
@@ -341,10 +453,7 @@ namespace WardWebsite.API.Controllers
                 return BadRequest(new { message = "Kích thước ảnh tối đa là 10MB" });
             }
 
-            var webRootPath = GetWebRootPath();
-
-            var mediaDirectory = Path.Combine(webRootPath, "uploads", "media");
-            Directory.CreateDirectory(mediaDirectory);
+            var mediaDirectory = GetMediaDirectoryPath();
 
             var fileName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
             var filePath = Path.Combine(mediaDirectory, fileName);

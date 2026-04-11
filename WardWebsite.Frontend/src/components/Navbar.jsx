@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import NotificationBell from './NotificationBell'
 
 export default function Navbar({ isLoggedIn, user, onLogout }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -170,6 +171,9 @@ export default function Navbar({ isLoggedIn, user, onLogout }) {
                 >
                   Hồ sơ
                 </Link>
+
+                <NotificationBell user={user} />
+
                 <div className="flex items-center space-x-2 bg-blue-500 px-4 py-2 rounded-lg">
                   {user?.avatarUrl ? (
                     <img
@@ -266,6 +270,14 @@ export default function Navbar({ isLoggedIn, user, onLogout }) {
                     <p className="font-medium">{user?.fullName || user?.username}</p>
                     <p className="text-blue-200 text-xs">Vai trò: {user?.role}</p>
                   </div>
+
+                  <div className="mb-3">
+                    <NotificationBell
+                      user={user}
+                      onItemClick={() => setIsOpen(false)}
+                    />
+                  </div>
+
                   <Link
                     to="/ho-so-ca-nhan"
                     onClick={() => setIsOpen(false)}

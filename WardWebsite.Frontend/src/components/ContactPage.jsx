@@ -1,9 +1,31 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import axios from 'axios'
+import AuthActionLoginModal from './AuthActionLoginModal'
 
-export default function ContactPage() {
+export default function ContactPage({ user = null, onLoginSuccess, requireLoginOnEnter = false }) {
   const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' })
   const [submitted, setSubmitted] = useState(false)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const isLoggedIn = Boolean(localStorage.getItem('token'))
+
+  useEffect(() => {
+    if (!user) {
+      return
+    }
+
+    setForm((previous) => ({
+      ...previous,
+      name: previous.name || user.fullName || user.username || '',
+      email: previous.email || user.email || '',
+      phone: previous.phone || user.phoneNumber || ''
+    }))
+  }, [user])
+
+  useEffect(() => {
+    if (requireLoginOnEnter && !isLoggedIn) {
+      setShowLoginModal(true)
+    }
+  }, [requireLoginOnEnter, isLoggedIn])
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -11,6 +33,12 @@ export default function ContactPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    if (!isLoggedIn) {
+      setShowLoginModal(true)
+      return
+    }
+
     if (!form.name || !form.email || !form.message) return
 
     try {
@@ -21,11 +49,34 @@ export default function ContactPage() {
         message: form.message
       })
       setSubmitted(true)
-      setForm({ name: '', email: '', phone: '', message: '' })
+      setForm((previous) => ({
+        ...previous,
+        message: ''
+      }))
       setTimeout(() => setSubmitted(false), 3000)
     } catch (error) {
+      const status = error?.response?.status
+      if (status === 401 || status === 403) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        setShowLoginModal(true)
+        return
+      }
+
       alert(error.response?.data?.message || 'Gửi liên hệ thất bại')
     }
+  }
+
+  const closeLoginModal = () => {
+    setShowLoginModal(false)
+  }
+
+  const handleLoginSuccess = (userData, options) => {
+    onLoginSuccess?.(userData, {
+      stayOnCurrentPath: true,
+      ...(options || {})
+    })
+    setShowLoginModal(false)
   }
 
   return (
@@ -97,66 +148,88 @@ export default function ContactPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="contact-label">Họ tên *</label>
-              <input
-                type="text"
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                placeholder="Nhập họ tên"
-                className="contact-input"
-                required
-              />
+          {!isLoggedIn ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-amber-900">
+              <p className="text-sm font-semibold">Bạn cần đăng nhập trước khi gửi liên hệ.</p>
+              <p className="mt-1 text-xs text-amber-800">Vui lòng đăng nhập để hệ thống ghi nhận đúng thông tin người gửi.</p>
+              <button
+                type="button"
+                onClick={() => setShowLoginModal(true)}
+                className="mt-3 inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                Đăng nhập để tiếp tục
+              </button>
             </div>
-
-            <div className="contact-grid-2">
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="contact-label">Email *</label>
+                <label className="contact-label">Họ tên *</label>
                 <input
-                  type="email"
-                  name="email"
-                  value={form.email}
+                  type="text"
+                  name="name"
+                  value={form.name}
                   onChange={handleChange}
-                  placeholder="Nhập email"
+                  placeholder="Nhập họ tên"
                   className="contact-input"
                   required
                 />
               </div>
 
-              <div>
-                <label className="contact-label">Điện thoại</label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={form.phone}
-                  onChange={handleChange}
-                  placeholder="Nhập số điện thoại"
-                  className="contact-input"
-                />
+              <div className="contact-grid-2">
+                <div>
+                  <label className="contact-label">Email *</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={form.email}
+                    onChange={handleChange}
+                    placeholder="Nhập email"
+                    className="contact-input"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="contact-label">Điện thoại</label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={form.phone}
+                    onChange={handleChange}
+                    placeholder="Nhập số điện thoại"
+                    className="contact-input"
+                  />
+                </div>
               </div>
-            </div>
 
-            <div>
-              <label className="contact-label">Tin nhắn *</label>
-              <textarea
-                name="message"
-                value={form.message}
-                onChange={handleChange}
-                placeholder="Nhập nội dung tin nhắn"
-                rows="6"
-                className="contact-input contact-textarea"
-                required
-              ></textarea>
-            </div>
+              <div>
+                <label className="contact-label">Tin nhắn *</label>
+                <textarea
+                  name="message"
+                  value={form.message}
+                  onChange={handleChange}
+                  placeholder="Nhập nội dung tin nhắn"
+                  rows="6"
+                  className="contact-input contact-textarea"
+                  required
+                ></textarea>
+              </div>
 
-            <button type="submit" className="contact-submit-btn">
-              Gửi liên hệ
-            </button>
-          </form>
+              <button type="submit" className="contact-submit-btn">
+                Gửi liên hệ
+              </button>
+            </form>
+          )}
         </div>
       </div>
+
+      <AuthActionLoginModal
+        open={showLoginModal}
+        actionLabel="gửi liên hệ"
+        onClose={closeLoginModal}
+        onLoginSuccess={handleLoginSuccess}
+        loginSuccessOptions={{ stayOnCurrentPath: true }}
+      />
     </div>
   )
 }

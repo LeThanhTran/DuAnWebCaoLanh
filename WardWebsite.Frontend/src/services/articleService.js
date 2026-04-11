@@ -122,14 +122,31 @@ export const getComments = async (articleId) => {
 }
 
 // POST tạo comment
-export const createComment = async (articleId, content) => {
+export const createComment = async (articleId, content, parentCommentId = null) => {
   try {
-    const response = await axios.post(`${API_URL}/${articleId}/comments`, { content }, {
+    const payload = { content }
+    if (Number.isInteger(parentCommentId) && parentCommentId > 0) {
+      payload.parentCommentId = parentCommentId
+    }
+
+    const response = await axios.post(`${API_URL}/${articleId}/comments`, payload, {
       headers: getAuthHeader()
     })
     return response.data
   } catch (error) {
     throw error.response?.data?.message || 'Lỗi tạo comment'
+  }
+}
+
+// POST like/dislike comment
+export const reactToComment = async (commentId, reactionType) => {
+  try {
+    const response = await axios.post(`/api/comments/${commentId}/reaction`, { reactionType }, {
+      headers: getAuthHeader()
+    })
+    return response.data
+  } catch (error) {
+    throw error.response?.data?.message || 'Lỗi tương tác bình luận'
   }
 }
 

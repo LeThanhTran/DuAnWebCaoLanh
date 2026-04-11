@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 using WardWebsite.API.Data;
 using WardWebsite.API.Models;
 using WardWebsite.API.Repositories;
@@ -99,8 +100,16 @@ namespace WardWebsite.API.Controllers
         {
             try
             {
+                var creatorUsername = User?.Identity?.Name?.Trim();
+                if (string.IsNullOrWhiteSpace(creatorUsername))
+                {
+                    return Unauthorized(new { success = false, message = "Không xác định được tài khoản nộp hồ sơ" });
+                }
+
                 if (string.IsNullOrWhiteSpace(dto.FullName) || string.IsNullOrWhiteSpace(dto.Phone) || dto.ServiceId <= 0)
                     return BadRequest(new { success = false, message = "Vui lòng điền đầy đủ thông tin" });
+
+                dto.CreatedByUsername = creatorUsername;
 
                 var application = await _repository.CreateApplicationAsync(dto);
 
@@ -127,6 +136,52 @@ namespace WardWebsite.API.Controllers
             {
                 return StatusCode(500, new { success = false, message = ex.Message });
             }
+        }
+
+        // GET: api/applications/my-summary
+        // Summary for the currently logged in user (mainly Viewer notification use-case)
+        [HttpGet("my-summary")]
+        [Authorize(Roles = "Admin,Editor,Viewer")]
+        public async Task<ActionResult<MyApplicationSummaryDto>> GetMySummary()
+        {
+            var username = User?.Identity?.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return Unauthorized(new { success = false, message = "Không xác định được tài khoản đăng nhập" });
+            }
+
+            var baseQuery = _context.Applications
+                .AsNoTracking()
+                .Where(a => a.CreatedByUsername == username);
+
+            var total = await baseQuery.CountAsync();
+            var pending = await baseQuery.CountAsync(a => a.Status == "Pending");
+            var processing = await baseQuery.CountAsync(a => a.Status == "Processing");
+            var approved = await baseQuery.CountAsync(a => a.Status == "Approved");
+            var rejected = await baseQuery.CountAsync(a => a.Status == "Rejected");
+            var pendingInfo = await baseQuery.CountAsync(a => a.Status == "PendingInfo");
+
+            var latestApprovedAt = await baseQuery
+                .Where(a => a.Status == "Approved")
+                .OrderByDescending(a => a.CreatedAt)
+                .Select(a => (DateTime?)a.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            return Ok(new
+            {
+                success = true,
+                data = new MyApplicationSummaryDto
+                {
+                    Username = username,
+                    Total = total,
+                    Pending = pending,
+                    Processing = processing,
+                    Approved = approved,
+                    Rejected = rejected,
+                    PendingInfo = pendingInfo,
+                    LatestApprovedAt = latestApprovedAt
+                }
+            });
         }
 
         // POST: api/applications/lookup

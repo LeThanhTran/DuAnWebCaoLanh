@@ -7,6 +7,7 @@ namespace WardWebsite.API.Models
         public string Phone { get; set; } = string.Empty;
         public string Address { get; set; } = string.Empty;
         public int ServiceId { get; set; }
+        public string CreatedByUsername { get; set; } = string.Empty;
     }
 
     public class ApplicationLookupRequestDto
@@ -49,6 +50,7 @@ namespace WardWebsite.API.Models
     {
         public int Id { get; set; }
         public string LookupCode { get; set; } = string.Empty;
+        public string CreatedByUsername { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         public string Address { get; set; } = string.Empty;
@@ -57,5 +59,17 @@ namespace WardWebsite.API.Models
         public string Status { get; set; } = string.Empty;
         public string? Notes { get; set; }
         public DateTime CreatedAt { get; set; }
+    }
+
+    public class MyApplicationSummaryDto
+    {
+        public string Username { get; set; } = string.Empty;
+        public int Total { get; set; }
+        public int Pending { get; set; }
+        public int Processing { get; set; }
+        public int Approved { get; set; }
+        public int Rejected { get; set; }
+        public int PendingInfo { get; set; }
+        public DateTime? LatestApprovedAt { get; set; }
     }
 }

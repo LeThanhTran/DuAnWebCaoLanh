@@ -49,6 +49,35 @@ const extractImageSources = (html) => {
     .filter(Boolean)
 }
 
+const normalizeMediaUrl = (value) => {
+  const input = String(value || '').trim()
+  if (!input) return ''
+
+  if (/^[a-z][a-z0-9+.-]*:/i.test(input)) {
+    return input
+  }
+
+  if (input.startsWith('//')) {
+    if (typeof window === 'undefined') {
+      return `https:${input}`
+    }
+
+    return `${window.location.protocol}${input}`
+  }
+
+  const normalizedPath = input.startsWith('/') ? input : `/${input.replace(/^\/+/, '')}`
+
+  if (typeof window === 'undefined') {
+    return normalizedPath
+  }
+
+  try {
+    return new URL(normalizedPath, window.location.origin).toString()
+  } catch {
+    return normalizedPath
+  }
+}
+
 const toPlainText = (html) => {
   return String(html || '')
     .replace(/<[^>]*>/g, ' ')
@@ -139,11 +168,12 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
       .map((article, index) => {
         const images = extractImageSources(article.content)
         const summary = toPlainText(article.contentPreview || article.content)
+        const fallbackImage = images.find(Boolean) || ''
 
         return {
           ...article,
           rank: index + 1,
-          image: article.thumbnailUrl || images[0] || '',
+          image: normalizeMediaUrl(article.thumbnailUrl) || normalizeMediaUrl(fallbackImage),
           summary: summary.length > 180 ? `${summary.slice(0, 177)}...` : summary,
           viewCount: Number(article.viewCount || 0),
           commentCount: Number(article.commentCount || 0),
@@ -574,39 +604,42 @@ export default function ArticleList({ refreshKey, moderationMode = false }) {
             </section>
           )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left text-gray-600">
+          <div className="overflow-x-auto pb-1">
+            <table className="min-w-[920px] w-full table-fixed text-sm text-left text-gray-600">
               <thead className="text-xs text-gray-700 uppercase bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3">STT</th>
+                  <th className="w-16 px-4 py-3 whitespace-nowrap">STT</th>
                   <th className="px-4 py-3">Tiêu đề</th>
-                  <th className="px-4 py-3">Danh mục</th>
-                  {canModerateArticle && <th className="px-4 py-3">Trạng thái</th>}
-                  <th className="px-4 py-3">Ngày tạo</th>
-                  {showActionColumn && <th className="px-4 py-3">Hành động</th>}
+                  <th className="w-44 px-4 py-3 whitespace-nowrap">Danh mục</th>
+                  {canModerateArticle && <th className="w-36 px-4 py-3 whitespace-nowrap">Trạng thái</th>}
+                  <th className="w-28 px-4 py-3 whitespace-nowrap">Ngày tạo</th>
+                  {showActionColumn && <th className="w-56 px-4 py-3 whitespace-nowrap">Hành động</th>}
                 </tr>
               </thead>
               <tbody>
                 {displayArticles.map((article, index) => (
                   <tr key={article.id} className="border-t hover:bg-gray-50 align-top">
-                    <td className="px-4 py-3">{total - rowOffset - index}</td>
-                    <td className="px-4 py-3 max-w-xs">
+                    <td className="px-4 py-3 whitespace-nowrap">{total - rowOffset - index}</td>
+                    <td className="px-4 py-3 min-w-0">
                       <button
                         onClick={() => navigate(`/articles/${article.id}`)}
-                        className="text-blue-600 hover:text-blue-800 font-medium truncate"
+                        className="block w-full truncate text-left text-blue-600 hover:text-blue-800 font-medium"
+                        title={article.title}
                       >
                         {article.title}
                       </button>
                     </td>
-                    <td className="px-4 py-3">{article.category}</td>
+                    <td className="px-4 py-3">
+                      <span className="block truncate" title={article.category}>{article.category}</span>
+                    </td>
                     {canModerateArticle && (
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${statusBadgeClass[article.status] || 'bg-gray-100 text-gray-700'}`}>
                           {statusLabel[article.status] || article.status || 'N/A'}
                         </span>
                       </td>
                     )}
-                    <td className="px-4 py-3">{new Date(article.createdAt).toLocaleDateString('vi-VN')}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{new Date(article.createdAt).toLocaleDateString('vi-VN')}</td>
                     {showActionColumn && (
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">

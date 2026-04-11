@@ -41,6 +41,7 @@ namespace WardWebsite.API.Repositories
                 {
                     Id = a.Id,
                     LookupCode = a.LookupCode,
+                    CreatedByUsername = a.CreatedByUsername,
                     FullName = a.FullName,
                     Phone = a.Phone,
                     Address = a.Address,
@@ -110,6 +111,7 @@ namespace WardWebsite.API.Repositories
                 {
                     Id = a.Id,
                     LookupCode = a.LookupCode,
+                    CreatedByUsername = a.CreatedByUsername,
                     FullName = a.FullName,
                     Phone = a.Phone,
                     Address = a.Address,
@@ -134,6 +136,7 @@ namespace WardWebsite.API.Repositories
                 {
                     Id = a.Id,
                     LookupCode = a.LookupCode,
+                    CreatedByUsername = a.CreatedByUsername,
                     FullName = a.FullName,
                     Phone = a.Phone,
                     Address = a.Address,
@@ -163,6 +166,7 @@ namespace WardWebsite.API.Repositories
             var application = new Application
             {
                 LookupCode = lookupCode,
+                CreatedByUsername = string.IsNullOrWhiteSpace(dto.CreatedByUsername) ? string.Empty : dto.CreatedByUsername.Trim(),
                 FullName = dto.FullName.Trim(),
                 Phone = dto.Phone.Trim(),
                 Address = dto.Address.Trim(),
@@ -178,6 +182,7 @@ namespace WardWebsite.API.Repositories
             {
                 Id = application.Id,
                 LookupCode = application.LookupCode,
+                CreatedByUsername = application.CreatedByUsername,
                 FullName = application.FullName,
                 Phone = application.Phone,
                 Address = application.Address,

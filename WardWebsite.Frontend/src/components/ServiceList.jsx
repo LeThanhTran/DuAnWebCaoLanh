@@ -1,16 +1,43 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { getServices } from '../services/serviceService'
 import ApplicationForm from './ApplicationForm'
+import AuthActionLoginModal from './AuthActionLoginModal'
 
-export default function ServiceList({ isLoggedIn = false }) {
+export default function ServiceList({ isLoggedIn = false, onLoginSuccess }) {
   const [services, setServices] = useState([])
   const [loading, setLoading] = useState(false)
   const [selectedService, setSelectedService] = useState(null)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [pendingServiceId, setPendingServiceId] = useState(null)
+  const [loginActionLabel, setLoginActionLabel] = useState('nộp hồ sơ dịch vụ')
+  const location = useLocation()
+  const navigate = useNavigate()
 
   useEffect(() => {
     fetchServices()
   }, [])
+
+  useEffect(() => {
+    if (!isLoggedIn || services.length === 0 || selectedService) {
+      return
+    }
+
+    const params = new URLSearchParams(location.search)
+    const applyServiceIdRaw = params.get('applyServiceId')
+    const applyServiceId = Number(applyServiceIdRaw)
+
+    if (!Number.isInteger(applyServiceId) || applyServiceId <= 0) {
+      return
+    }
+
+    const matchedService = services.find((item) => item.id === applyServiceId)
+    if (matchedService) {
+      setSelectedService(matchedService)
+    }
+
+    navigate('/services', { replace: true })
+  }, [isLoggedIn, services, selectedService, location.search, navigate])
 
   const fetchServices = async () => {
     try {
@@ -26,6 +53,34 @@ export default function ServiceList({ isLoggedIn = false }) {
 
   const handleBackFromForm = () => {
     setSelectedService(null)
+  }
+
+  const openGuestApplyModal = (service) => {
+    setPendingServiceId(service?.id || null)
+    setLoginActionLabel(
+      service?.name
+        ? `nộp hồ sơ dịch vụ ${service.name}`
+        : 'nộp hồ sơ dịch vụ'
+    )
+    setShowLoginModal(true)
+  }
+
+  const closeLoginModal = () => {
+    setShowLoginModal(false)
+  }
+
+  const handleLoginSuccess = (userData, options) => {
+    const redirectPath = Number.isInteger(pendingServiceId)
+      ? `/services?applyServiceId=${pendingServiceId}`
+      : '/services'
+
+    onLoginSuccess?.(userData, {
+      redirectPath,
+      ...(options || {})
+    })
+
+    setShowLoginModal(false)
+    setPendingServiceId(null)
   }
 
   if (loading) {
@@ -104,17 +159,26 @@ export default function ServiceList({ isLoggedIn = false }) {
                   Nộp hồ sơ
                 </button>
               ) : (
-                <Link
-                  to="/"
-                  className="service-secondary-button"
+                <button
+                  type="button"
+                  onClick={() => openGuestApplyModal(service)}
+                  className="service-primary-button"
                 >
-                  Đăng nhập để sử dụng dịch vụ
-                </Link>
+                  Nộp hồ sơ
+                </button>
               )}
             </article>
           ))}
         </div>
       )}
+
+      <AuthActionLoginModal
+        open={showLoginModal && !isLoggedIn}
+        actionLabel={loginActionLabel}
+        onClose={closeLoginModal}
+        onLoginSuccess={handleLoginSuccess}
+        loginSuccessOptions={{ stayOnCurrentPath: false }}
+      />
     </div>
   )
 }

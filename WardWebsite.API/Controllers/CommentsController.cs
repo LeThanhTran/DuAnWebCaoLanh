@@ -1,5 +1,5 @@
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WardWebsite.API.Data;
 using WardWebsite.API.Models;
@@ -19,8 +19,8 @@ namespace WardWebsite.API.Controllers
 
         private bool IsModerator()
         {
-            return User?.Identity?.IsAuthenticated == true &&
-                   (User.IsInRole("Admin") || User.IsInRole("Editor"));
+            return User?.Identity?.IsAuthenticated == true
+                   && (User.IsInRole("Admin") || User.IsInRole("Editor"));
         }
 
         private static string NormalizeCommentStatus(string? status)
@@ -38,6 +38,35 @@ namespace WardWebsite.API.Controllers
                 "hidden" => "Hidden",
                 _ => string.Empty
             };
+        }
+
+        private static string NormalizeReactionType(string? reactionType)
+        {
+            if (string.IsNullOrWhiteSpace(reactionType))
+            {
+                return string.Empty;
+            }
+
+            return reactionType.Trim().ToLowerInvariant() switch
+            {
+                "like" => "Like",
+                "dislike" => "Dislike",
+                _ => string.Empty
+            };
+        }
+
+        private static void ApplyReactionCountDelta(Comment comment, string reactionType, int delta)
+        {
+            if (reactionType == "Like")
+            {
+                comment.LikeCount = Math.Max(0, comment.LikeCount + delta);
+                return;
+            }
+
+            if (reactionType == "Dislike")
+            {
+                comment.DislikeCount = Math.Max(0, comment.DislikeCount + delta);
+            }
         }
 
         private void AddAdminLog(string action, int? targetId, string details)
@@ -62,12 +91,17 @@ namespace WardWebsite.API.Controllers
                 .FirstOrDefaultAsync(a => a.Id == articleId && !a.IsDeleted);
 
             if (article == null)
+            {
                 return NotFound(new { message = "Article không tồn tại" });
+            }
 
             if (!IsModerator() && article.Status != "Published")
+            {
                 return NotFound(new { message = "Article không tồn tại" });
+            }
 
             var query = _context.Comments
+                .AsNoTracking()
                 .Where(c => c.ArticleId == articleId)
                 .AsQueryable();
 
@@ -84,17 +118,36 @@ namespace WardWebsite.API.Controllers
                 query = query.Where(c => c.Status == "Approved");
             }
 
-            var comments = await query
-                .OrderByDescending(c => c.CreatedAt)
-                .Select(c => new
+            var currentUsername = User?.Identity?.Name?.Trim() ?? string.Empty;
+            var userReactionQuery = string.IsNullOrWhiteSpace(currentUsername)
+                ? _context.CommentReactions.AsNoTracking().Where(r => false)
+                : _context.CommentReactions.AsNoTracking().Where(r => r.Username == currentUsername);
+
+            var comments = await (
+                from c in query
+                join u in _context.Users.AsNoTracking() on c.CreatedByUsername equals u.Username into userGroup
+                from u in userGroup.DefaultIfEmpty()
+                join r in userReactionQuery on c.Id equals r.CommentId into reactionGroup
+                from r in reactionGroup.DefaultIfEmpty()
+                orderby c.CreatedAt descending
+                select new
                 {
                     c.Id,
+                    c.ArticleId,
+                    c.ParentCommentId,
                     c.Content,
+                    c.CreatedByUsername,
+                    CreatedByDisplayName = u != null && !string.IsNullOrWhiteSpace(u.FullName)
+                        ? u.FullName
+                        : c.CreatedByUsername,
                     c.Status,
                     c.CreatedAt,
                     c.ReviewedAt,
                     c.ReviewedBy,
-                    c.ReviewNote
+                    c.ReviewNote,
+                    c.LikeCount,
+                    c.DislikeCount,
+                    CurrentUserReaction = r != null ? r.ReactionType : null
                 })
                 .ToListAsync();
 
@@ -106,17 +159,21 @@ namespace WardWebsite.API.Controllers
         [Authorize]
         public async Task<ActionResult<object>> CreateComment(int articleId, CreateCommentDto dto)
         {
-            // Kiểm tra article tồn tại
             var article = await _context.Articles.FirstOrDefaultAsync(a => a.Id == articleId && !a.IsDeleted);
             if (article == null)
+            {
                 return NotFound(new { message = "Article không tồn tại" });
+            }
 
-            // Validate
             if (string.IsNullOrWhiteSpace(dto.Content))
+            {
                 return BadRequest(new { message = "Comment không được để trống" });
+            }
 
             if (dto.Content.Length > 5000)
+            {
                 return BadRequest(new { message = "Comment tối đa 5000 ký tự" });
+            }
 
             var commenterUsername = User?.Identity?.Name?.Trim();
             if (string.IsNullOrWhiteSpace(commenterUsername))
@@ -124,26 +181,60 @@ namespace WardWebsite.API.Controllers
                 return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập" });
             }
 
+            int? parentCommentId = null;
+            if (dto.ParentCommentId.HasValue)
+            {
+                var parentComment = await _context.Comments
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.Id == dto.ParentCommentId.Value && c.ArticleId == articleId);
+
+                if (parentComment == null)
+                {
+                    return BadRequest(new { message = "Không tìm thấy bình luận gốc để trả lời" });
+                }
+
+                if (!IsModerator() && parentComment.Status != "Approved")
+                {
+                    return BadRequest(new { message = "Bạn chỉ có thể trả lời bình luận đã được duyệt" });
+                }
+
+                parentCommentId = parentComment.Id;
+            }
+
             var comment = new Comment
             {
                 Content = dto.Content.Trim(),
                 ArticleId = articleId,
+                ParentCommentId = parentCommentId,
                 CreatedByUsername = commenterUsername,
                 Status = "Pending",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                LikeCount = 0,
+                DislikeCount = 0
             };
 
             _context.Comments.Add(comment);
             await _context.SaveChangesAsync();
 
+            var displayName = await _context.Users
+                .AsNoTracking()
+                .Where(u => u.Username == commenterUsername)
+                .Select(u => u.FullName)
+                .FirstOrDefaultAsync();
+
             return CreatedAtAction(nameof(GetComments), new { articleId }, new
             {
                 message = "Bình luận đã được gửi và đang chờ kiểm duyệt",
                 comment.Id,
+                comment.ArticleId,
+                comment.ParentCommentId,
                 comment.Content,
                 comment.CreatedByUsername,
+                CreatedByDisplayName = string.IsNullOrWhiteSpace(displayName) ? comment.CreatedByUsername : displayName,
                 comment.Status,
-                comment.CreatedAt
+                comment.CreatedAt,
+                comment.LikeCount,
+                comment.DislikeCount
             });
         }
 
@@ -156,8 +247,15 @@ namespace WardWebsite.API.Controllers
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
-            if (page < 1) page = 1;
-            if (pageSize < 1 || pageSize > 100) pageSize = 20;
+            if (page < 1)
+            {
+                page = 1;
+            }
+
+            if (pageSize < 1 || pageSize > 100)
+            {
+                pageSize = 20;
+            }
 
             var query = _context.Comments
                 .Include(c => c.Article)
@@ -174,9 +272,9 @@ namespace WardWebsite.API.Controllers
             {
                 var keyword = search.Trim().ToLower();
                 query = query.Where(c =>
-                    c.Content.ToLower().Contains(keyword) ||
-                    c.CreatedByUsername.ToLower().Contains(keyword) ||
-                    c.Article!.Title.ToLower().Contains(keyword));
+                    c.Content.ToLower().Contains(keyword)
+                    || c.CreatedByUsername.ToLower().Contains(keyword)
+                    || c.Article!.Title.ToLower().Contains(keyword));
             }
 
             var total = await query.CountAsync();
@@ -189,6 +287,8 @@ namespace WardWebsite.API.Controllers
                 .Select(c => new
                 {
                     c.Id,
+                    c.ArticleId,
+                    c.ParentCommentId,
                     c.Content,
                     c.Status,
                     c.CreatedAt,
@@ -196,7 +296,8 @@ namespace WardWebsite.API.Controllers
                     c.ReviewedBy,
                     c.ReviewNote,
                     c.CreatedByUsername,
-                    c.ArticleId,
+                    c.LikeCount,
+                    c.DislikeCount,
                     ArticleTitle = c.Article!.Title
                 })
                 .ToListAsync();
@@ -209,6 +310,86 @@ namespace WardWebsite.API.Controllers
                 status = normalizedStatus,
                 search,
                 data = comments
+            });
+        }
+
+        // POST /api/comments/{id}/reaction
+        [HttpPost("/api/comments/{id}/reaction")]
+        [Authorize]
+        public async Task<ActionResult<object>> ReactToComment(int id, ReactCommentDto dto)
+        {
+            var comment = await _context.Comments
+                .Include(c => c.Article)
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (comment == null)
+            {
+                return NotFound(new { message = "Comment không tồn tại" });
+            }
+
+            if (!IsModerator() && comment.Status != "Approved")
+            {
+                return BadRequest(new { message = "Bạn chỉ có thể tương tác với bình luận đã được duyệt" });
+            }
+
+            var normalizedReactionType = NormalizeReactionType(dto.ReactionType);
+            if (string.IsNullOrWhiteSpace(normalizedReactionType))
+            {
+                return BadRequest(new { message = "Loại phản ứng không hợp lệ" });
+            }
+
+            var username = User?.Identity?.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập" });
+            }
+
+            var existingReaction = await _context.CommentReactions
+                .FirstOrDefaultAsync(r => r.CommentId == comment.Id && r.Username == username);
+
+            string? currentUserReaction;
+
+            if (existingReaction == null)
+            {
+                _context.CommentReactions.Add(new CommentReaction
+                {
+                    CommentId = comment.Id,
+                    Username = username,
+                    ReactionType = normalizedReactionType,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+
+                ApplyReactionCountDelta(comment, normalizedReactionType, 1);
+                currentUserReaction = normalizedReactionType;
+            }
+            else if (existingReaction.ReactionType == normalizedReactionType)
+            {
+                ApplyReactionCountDelta(comment, existingReaction.ReactionType, -1);
+                _context.CommentReactions.Remove(existingReaction);
+                currentUserReaction = null;
+            }
+            else
+            {
+                ApplyReactionCountDelta(comment, existingReaction.ReactionType, -1);
+                existingReaction.ReactionType = normalizedReactionType;
+                existingReaction.UpdatedAt = DateTime.UtcNow;
+                ApplyReactionCountDelta(comment, normalizedReactionType, 1);
+                currentUserReaction = normalizedReactionType;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    commentId = comment.Id,
+                    likeCount = comment.LikeCount,
+                    dislikeCount = comment.DislikeCount,
+                    currentUserReaction
+                }
             });
         }
 
@@ -285,6 +466,12 @@ namespace WardWebsite.API.Controllers
     public class CreateCommentDto
     {
         public string Content { get; set; } = string.Empty;
+        public int? ParentCommentId { get; set; }
+    }
+
+    public class ReactCommentDto
+    {
+        public string ReactionType { get; set; } = string.Empty;
     }
 
     public class ModerateCommentDto

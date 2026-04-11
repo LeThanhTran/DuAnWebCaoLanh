@@ -1,9 +1,83 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getArticleById } from '../services/articleService'
 import CommentList from './CommentList'
 import CommentForm from './CommentForm'
 import DOMPurify from 'dompurify'
+
+const normalizeMediaUrl = (value) => {
+  const input = String(value || '').trim()
+  if (!input) return ''
+
+  if (/^[a-z][a-z0-9+.-]*:/i.test(input)) {
+    return input
+  }
+
+  if (input.startsWith('//')) {
+    if (typeof window === 'undefined') {
+      return `https:${input}`
+    }
+
+    return `${window.location.protocol}${input}`
+  }
+
+  const normalizedPath = input.startsWith('/') ? input : `/${input.replace(/^\/+/, '')}`
+
+  if (typeof window === 'undefined') {
+    return normalizedPath
+  }
+
+  try {
+    return new URL(normalizedPath, window.location.origin).toString()
+  } catch {
+    return normalizedPath
+  }
+}
+
+const prepareArticleHtml = (html) => {
+  const input = String(html || '').trim()
+  if (!input || typeof window === 'undefined') {
+    return input
+  }
+
+  try {
+    const parser = new DOMParser()
+    const parsedDocument = parser.parseFromString(input, 'text/html')
+
+    parsedDocument.querySelectorAll('img').forEach((img) => {
+      const normalizedSrc = normalizeMediaUrl(img.getAttribute('src'))
+      if (normalizedSrc) {
+        img.setAttribute('src', normalizedSrc)
+      }
+
+      img.setAttribute('loading', 'lazy')
+      img.setAttribute('decoding', 'async')
+      img.removeAttribute('width')
+      img.removeAttribute('height')
+    })
+
+    parsedDocument.querySelectorAll('a[href]').forEach((link) => {
+      const href = String(link.getAttribute('href') || '').trim()
+      if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+        return
+      }
+
+      if (href.toLowerCase().startsWith('javascript:')) {
+        link.removeAttribute('href')
+        return
+      }
+
+      const normalizedHref = normalizeMediaUrl(href)
+      if (normalizedHref) {
+        link.setAttribute('href', normalizedHref)
+      }
+    })
+
+    return parsedDocument.body.innerHTML
+  } catch {
+    return input
+  }
+}
 
 export default function ArticleDetail({ onLoginSuccess }) {
   const { id } = useParams()
@@ -119,6 +193,11 @@ export default function ArticleDetail({ onLoginSuccess }) {
     }
   }
 
+  const renderedArticleHtml = useMemo(() => {
+    const sanitized = DOMPurify.sanitize(article?.content || '')
+    return prepareArticleHtml(sanitized)
+  }, [article?.content])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -197,9 +276,9 @@ export default function ArticleDetail({ onLoginSuccess }) {
 
           {/* Content */}
           <div
-            className="prose prose-lg max-w-none text-gray-700 leading-relaxed"
+            className="article-rich-content max-w-none text-gray-700 leading-relaxed"
             dangerouslySetInnerHTML={{
-              __html: DOMPurify.sanitize(article.content || '')
+              __html: renderedArticleHtml
             }}
           >
           </div>
@@ -261,7 +340,12 @@ export default function ArticleDetail({ onLoginSuccess }) {
             onCommentCreated={handleCommentCreated}
             onLoginSuccess={onLoginSuccess}
           />
-          <CommentList key={commentRefreshKey} articleId={article.id} refreshKey={commentRefreshKey} />
+          <CommentList
+            key={commentRefreshKey}
+            articleId={article.id}
+            refreshKey={commentRefreshKey}
+            onLoginSuccess={onLoginSuccess}
+          />
         </article>
       </div>
     </div>

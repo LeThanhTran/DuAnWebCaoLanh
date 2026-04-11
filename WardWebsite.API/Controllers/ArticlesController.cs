@@ -1,7 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using System.Net;
+using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
 using WardWebsite.API.Data;
 using WardWebsite.API.Models;
@@ -13,10 +17,24 @@ namespace WardWebsite.API.Controllers
     public class ArticlesController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IMemoryCache _cache;
+        private readonly IWebHostEnvironment _environment;
+        private const int ContentPreviewMaxLength = 220;
+        private const int MaxMediaUrlLength = 2048;
+        private const int MaxPreviewScanLength = 20000;
+        private const int MaxThumbnailScanLength = 32768;
+        private const int MaxInlineImageBytes = 8 * 1024 * 1024;
+        private static readonly TimeSpan PublicListCacheDuration = TimeSpan.FromSeconds(20);
+        private static readonly TimeSpan FeaturedCacheDuration = TimeSpan.FromSeconds(20);
+        private static readonly Regex InlineImageSourceRegex = new(
+            "<img\\b[^>]*\\bsrc\\s*=\\s*(?<quote>[\"'])(?<src>[^\"']+)\\k<quote>",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        public ArticlesController(AppDbContext context)
+        public ArticlesController(AppDbContext context, IMemoryCache cache, IWebHostEnvironment environment)
         {
             _context = context;
+            _cache = cache;
+            _environment = environment;
         }
 
         private bool IsModerator()
@@ -40,6 +58,429 @@ namespace WardWebsite.API.Controllers
         {
             var withoutTags = Regex.Replace(html, "<[^>]*>", " ");
             return WebUtility.HtmlDecode(withoutTags).Trim();
+        }
+
+        private static string BuildContentPreview(string? html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+            {
+                return string.Empty;
+            }
+
+            var scanLength = Math.Min(html.Length, MaxPreviewScanLength);
+            var previewBuilder = new StringBuilder(ContentPreviewMaxLength + 32);
+            var insideTag = false;
+            var reachedLimit = false;
+
+            for (var index = 0; index < scanLength; index++)
+            {
+                var character = html[index];
+
+                if (character == '<')
+                {
+                    insideTag = true;
+                    continue;
+                }
+
+                if (insideTag)
+                {
+                    if (character == '>')
+                    {
+                        insideTag = false;
+                    }
+
+                    continue;
+                }
+
+                if (char.IsWhiteSpace(character))
+                {
+                    if (previewBuilder.Length > 0 && previewBuilder[previewBuilder.Length - 1] != ' ')
+                    {
+                        previewBuilder.Append(' ');
+                    }
+
+                    continue;
+                }
+
+                if (previewBuilder.Length >= ContentPreviewMaxLength)
+                {
+                    reachedLimit = true;
+                    break;
+                }
+
+                previewBuilder.Append(character);
+            }
+
+            var plainText = WebUtility.HtmlDecode(previewBuilder.ToString()).Trim();
+            if (plainText.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            if (!reachedLimit || plainText.Length <= ContentPreviewMaxLength)
+            {
+                return plainText;
+            }
+
+            return $"{plainText.Substring(0, ContentPreviewMaxLength - 3)}...";
+        }
+
+        private string BuildThumbnailUrl(string? html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+            {
+                return string.Empty;
+            }
+
+            var htmlSegment = html.Length > MaxThumbnailScanLength
+                ? html.Substring(0, MaxThumbnailScanLength)
+                : html;
+
+            var imageStart = htmlSegment.IndexOf("<img", StringComparison.OrdinalIgnoreCase);
+            while (imageStart >= 0)
+            {
+                var imageEnd = htmlSegment.IndexOf('>', imageStart);
+                if (imageEnd < 0)
+                {
+                    break;
+                }
+
+                var rawSource = ExtractAttributeValue(htmlSegment, imageStart, imageEnd, "src");
+                if (!string.IsNullOrWhiteSpace(rawSource))
+                {
+                    var normalized = NormalizeContentMediaUrl(WebUtility.HtmlDecode(rawSource).Trim());
+                    if (!string.IsNullOrWhiteSpace(normalized))
+                    {
+                        return normalized;
+                    }
+                }
+
+                imageStart = htmlSegment.IndexOf("<img", imageEnd + 1, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return string.Empty;
+        }
+
+        private static string ExtractAttributeValue(string html, int tagStart, int tagEnd, string attributeName)
+        {
+            var searchIndex = tagStart;
+            while (searchIndex < tagEnd)
+            {
+                var attributeIndex = html.IndexOf(attributeName, searchIndex, StringComparison.OrdinalIgnoreCase);
+                if (attributeIndex < 0 || attributeIndex >= tagEnd)
+                {
+                    return string.Empty;
+                }
+
+                var beforeIndex = attributeIndex - 1;
+                if (beforeIndex >= tagStart && !char.IsWhiteSpace(html[beforeIndex]) && html[beforeIndex] != '<')
+                {
+                    searchIndex = attributeIndex + attributeName.Length;
+                    continue;
+                }
+
+                var valueIndex = attributeIndex + attributeName.Length;
+                while (valueIndex < tagEnd && char.IsWhiteSpace(html[valueIndex]))
+                {
+                    valueIndex++;
+                }
+
+                if (valueIndex >= tagEnd || html[valueIndex] != '=')
+                {
+                    searchIndex = valueIndex + 1;
+                    continue;
+                }
+
+                valueIndex++;
+                while (valueIndex < tagEnd && char.IsWhiteSpace(html[valueIndex]))
+                {
+                    valueIndex++;
+                }
+
+                if (valueIndex >= tagEnd)
+                {
+                    return string.Empty;
+                }
+
+                var quote = html[valueIndex];
+                if (quote == '"' || quote == '\'')
+                {
+                    var valueStart = valueIndex + 1;
+                    var valueEnd = html.IndexOf(quote, valueStart);
+                    if (valueEnd < 0 || valueEnd > tagEnd)
+                    {
+                        return string.Empty;
+                    }
+
+                    return html.Substring(valueStart, valueEnd - valueStart);
+                }
+
+                var unquotedStart = valueIndex;
+                var unquotedEnd = unquotedStart;
+                while (unquotedEnd < tagEnd && !char.IsWhiteSpace(html[unquotedEnd]) && html[unquotedEnd] != '>')
+                {
+                    unquotedEnd++;
+                }
+
+                return html.Substring(unquotedStart, unquotedEnd - unquotedStart);
+            }
+
+            return string.Empty;
+        }
+
+        private string NormalizeContentMediaUrl(string? mediaUrl)
+        {
+            if (string.IsNullOrWhiteSpace(mediaUrl))
+            {
+                return string.Empty;
+            }
+
+            var normalized = mediaUrl.Trim().Replace('\\', '/');
+
+            if (normalized.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            if (normalized.Length > MaxMediaUrlLength)
+            {
+                return string.Empty;
+            }
+
+            if (normalized.StartsWith("//"))
+            {
+                return $"{Request.Scheme}:{normalized}";
+            }
+
+            if (Uri.TryCreate(normalized, UriKind.Absolute, out _))
+            {
+                return normalized;
+            }
+
+            var relativePath = normalized.StartsWith('/')
+                ? normalized
+                : $"/{normalized.TrimStart('/')}";
+
+            if (Request?.Host.HasValue != true)
+            {
+                return relativePath;
+            }
+
+            return $"{Request.Scheme}://{Request.Host}{relativePath}";
+        }
+
+        private static string TrimContentForScan(string? html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+            {
+                return string.Empty;
+            }
+
+            return html.Length > MaxThumbnailScanLength
+                ? html.Substring(0, MaxThumbnailScanLength)
+                : html;
+        }
+
+        private static bool HasInlineDataImage(string? html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+            {
+                return false;
+            }
+
+            return html.IndexOf("data:image/", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private string GetUploadsRootPath()
+        {
+            var homePath = Environment.GetEnvironmentVariable("HOME");
+            if (!string.IsNullOrWhiteSpace(homePath))
+            {
+                return Path.Combine(homePath, "site", "uploads");
+            }
+
+            return Path.Combine(_environment.ContentRootPath, "App_Data", "uploads");
+        }
+
+        private string GetMediaStorageDirectoryPath()
+        {
+            var candidates = new[]
+            {
+                Path.Combine(GetUploadsRootPath(), "media"),
+                Path.Combine(_environment.WebRootPath ?? Path.Combine(_environment.ContentRootPath, "wwwroot"), "uploads", "media")
+            };
+
+            foreach (var candidate in candidates)
+            {
+                try
+                {
+                    Directory.CreateDirectory(candidate);
+                    return candidate;
+                }
+                catch
+                {
+                    // Try next candidate path.
+                }
+            }
+
+            return Path.Combine(_environment.ContentRootPath, "App_Data", "uploads", "media");
+        }
+
+        private string BuildLocalMediaUrl(string fileName)
+        {
+            var relativePath = $"/uploads/media/{fileName}";
+
+            if (Request?.Host.HasValue != true)
+            {
+                return relativePath;
+            }
+
+            return $"{Request.Scheme}://{Request.Host}{relativePath}";
+        }
+
+        private static bool TryParseInlineImageDataUri(string source, out byte[] bytes, out string extension)
+        {
+            bytes = Array.Empty<byte>();
+            extension = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(source)
+                || !source.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            const string prefix = "data:image/";
+            const string base64Marker = ";base64,";
+
+            var markerIndex = source.IndexOf(base64Marker, StringComparison.OrdinalIgnoreCase);
+            if (markerIndex < 0)
+            {
+                return false;
+            }
+
+            var mimeType = source.Substring(prefix.Length, markerIndex - prefix.Length).Trim().ToLowerInvariant();
+            extension = mimeType switch
+            {
+                "jpeg" => "jpg",
+                "jpg" => "jpg",
+                "png" => "png",
+                "gif" => "gif",
+                "webp" => "webp",
+                _ => string.Empty
+            };
+
+            if (string.IsNullOrWhiteSpace(extension))
+            {
+                return false;
+            }
+
+            var base64Payload = source.Substring(markerIndex + base64Marker.Length);
+            if (string.IsNullOrWhiteSpace(base64Payload))
+            {
+                return false;
+            }
+
+            var compactPayload = Regex.Replace(base64Payload, "\\s+", string.Empty);
+
+            try
+            {
+                bytes = Convert.FromBase64String(compactPayload);
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (bytes.Length == 0 || bytes.Length > MaxInlineImageBytes)
+            {
+                bytes = Array.Empty<byte>();
+                return false;
+            }
+
+            return true;
+        }
+
+        private async Task<(string Content, bool Updated)> ConvertInlineDataImagesToStoredUrlsAsync(string? html)
+        {
+            var safeHtml = html ?? string.Empty;
+            try
+            {
+                if (!HasInlineDataImage(safeHtml))
+                {
+                    return (safeHtml, false);
+                }
+
+                var matches = InlineImageSourceRegex.Matches(safeHtml);
+                if (matches.Count == 0)
+                {
+                    return (safeHtml, false);
+                }
+
+                var updatedContent = safeHtml;
+                var hasUpdated = false;
+                var mediaDirectory = GetMediaStorageDirectoryPath();
+
+                foreach (Match match in matches)
+                {
+                    if (!match.Success)
+                    {
+                        continue;
+                    }
+
+                    var srcValue = WebUtility.HtmlDecode(match.Groups["src"].Value).Trim();
+                    if (!TryParseInlineImageDataUri(srcValue, out var imageBytes, out var extension))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        var fileName = $"{Guid.NewGuid():N}.{extension}";
+                        var filePath = Path.Combine(mediaDirectory, fileName);
+                        await System.IO.File.WriteAllBytesAsync(filePath, imageBytes);
+
+                        var replacementUrl = BuildLocalMediaUrl(fileName);
+                        updatedContent = updatedContent.Replace(match.Groups["src"].Value, replacementUrl, StringComparison.Ordinal);
+                        hasUpdated = true;
+                    }
+                    catch
+                    {
+                        // Skip invalid image payload or write failures and keep original source.
+                    }
+                }
+
+                return (updatedContent, hasUpdated);
+            }
+            catch
+            {
+                return (safeHtml, false);
+            }
+        }
+
+        private async Task<string> EnsureInlineImagesMigratedAsync(int articleId)
+        {
+            try
+            {
+                var article = await _context.Articles.FirstOrDefaultAsync(a => a.Id == articleId && !a.IsDeleted);
+                if (article == null || string.IsNullOrWhiteSpace(article.Content))
+                {
+                    return string.Empty;
+                }
+
+                var migrated = await ConvertInlineDataImagesToStoredUrlsAsync(article.Content);
+                if (migrated.Updated)
+                {
+                    article.Content = migrated.Content;
+                    await _context.SaveChangesAsync();
+                    return migrated.Content;
+                }
+
+                return article.Content;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private static string NormalizeStatus(string? status)
@@ -113,6 +554,20 @@ namespace WardWebsite.API.Controllers
             }
 
             var canViewUnpublished = includeUnpublished && IsModerator();
+            string? cacheKey = null;
+
+            if (!canViewUnpublished)
+            {
+                var normalizedSearch = string.IsNullOrWhiteSpace(search)
+                    ? string.Empty
+                    : search.Trim().ToLowerInvariant();
+
+                cacheKey = $"articles:list:{page}:{pageSize}:{normalizedSearch}:{categoryId?.ToString() ?? "all"}";
+                if (_cache.TryGetValue(cacheKey, out object? cachedResponse))
+                {
+                    return Ok(cachedResponse);
+                }
+            }
 
             if (!canViewUnpublished)
             {
@@ -128,7 +583,7 @@ namespace WardWebsite.API.Controllers
             var total = await query.CountAsync();
             var skip = (page - 1) * pageSize;
 
-            var articles = await query
+            var articleRows = await query
                 .OrderByDescending(a => a.CreatedAt)
                 .Skip(skip)
                 .Take(pageSize)
@@ -136,9 +591,12 @@ namespace WardWebsite.API.Controllers
                 {
                     a.Id,
                     a.Title,
-                    Content = string.Empty,
-                    ContentPreview = string.Empty,
-                    ThumbnailUrl = string.Empty,
+                    ContentHtml = a.Content == null
+                        ? string.Empty
+                        : (a.Content.Length > MaxThumbnailScanLength
+                            ? a.Content.Substring(0, MaxThumbnailScanLength)
+                            : a.Content),
+                    HasInlineDataImage = a.Content != null && a.Content.Contains("data:image/"),
                     a.Status,
                     a.CreatedAt,
                     a.SubmittedAt,
@@ -152,7 +610,40 @@ namespace WardWebsite.API.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(new
+            var articles = new List<object>(articleRows.Count);
+            foreach (var a in articleRows)
+            {
+                var contentForPreview = a.ContentHtml;
+                var thumbnailUrl = BuildThumbnailUrl(contentForPreview);
+
+                if (string.IsNullOrWhiteSpace(thumbnailUrl) && a.HasInlineDataImage)
+                {
+                    var migratedContent = await EnsureInlineImagesMigratedAsync(a.Id);
+                    contentForPreview = TrimContentForScan(migratedContent);
+                    thumbnailUrl = BuildThumbnailUrl(contentForPreview);
+                }
+
+                articles.Add(new
+                {
+                    a.Id,
+                    a.Title,
+                    Content = string.Empty,
+                    ContentPreview = BuildContentPreview(contentForPreview),
+                    ThumbnailUrl = thumbnailUrl,
+                    a.Status,
+                    a.CreatedAt,
+                    a.SubmittedAt,
+                    a.ReviewedAt,
+                    a.ReviewedBy,
+                    a.PublishedAt,
+                    a.PublishedBy,
+                    a.ViewCount,
+                    a.CommentCount,
+                    a.Category
+                });
+            }
+
+            var response = new
             {
                 total,
                 page,
@@ -161,7 +652,14 @@ namespace WardWebsite.API.Controllers
                 categoryId,
                 status = canViewUnpublished ? normalizedStatus : "Published",
                 data = articles
-            });
+            };
+
+            if (!string.IsNullOrWhiteSpace(cacheKey))
+            {
+                _cache.Set(cacheKey, response, PublicListCacheDuration);
+            }
+
+            return Ok(response);
         }
 
         // GET /api/articles/featured?take=5
@@ -171,27 +669,78 @@ namespace WardWebsite.API.Controllers
             if (take < 1) take = 5;
             if (take > 10) take = 10;
 
-            var featured = await _context.Articles
-                .Where(a => !a.IsDeleted && a.Status == "Published")
-                .Include(a => a.Category)
-                .Select(a => new
+            var cacheKey = $"articles:featured:{take}";
+            if (_cache.TryGetValue(cacheKey, out object? cachedFeatured))
+            {
+                return Ok(cachedFeatured);
+            }
+
+            var approvedCommentCounts = _context.Comments
+                .AsNoTracking()
+                .Where(c => c.Status == "Approved")
+                .GroupBy(c => c.ArticleId)
+                .Select(g => new
+                {
+                    ArticleId = g.Key,
+                    Count = g.Count()
+                });
+
+            var featuredRows = await (
+                from a in _context.Articles.AsNoTracking()
+                where !a.IsDeleted && a.Status == "Published"
+                join cc in approvedCommentCounts on a.Id equals cc.ArticleId into commentGroup
+                from cc in commentGroup.DefaultIfEmpty()
+                orderby a.ViewCount descending,
+                        ((int?)cc.Count ?? 0) descending,
+                        (a.PublishedAt ?? a.CreatedAt) descending
+                select new
+                {
+                    a.Id,
+                    a.Title,
+                    ContentHtml = a.Content == null
+                        ? string.Empty
+                        : (a.Content.Length > MaxThumbnailScanLength
+                            ? a.Content.Substring(0, MaxThumbnailScanLength)
+                            : a.Content),
+                    HasInlineDataImage = a.Content != null && a.Content.Contains("data:image/"),
+                    a.CreatedAt,
+                    a.PublishedAt,
+                    a.ViewCount,
+                    CommentCount = (int?)cc.Count ?? 0,
+                    Category = a.Category != null ? a.Category.Name : string.Empty
+                })
+                .Take(take)
+                .ToListAsync();
+
+            var featured = new List<object>(featuredRows.Count);
+            foreach (var a in featuredRows)
+            {
+                var contentForPreview = a.ContentHtml;
+                var thumbnailUrl = BuildThumbnailUrl(contentForPreview);
+
+                if (string.IsNullOrWhiteSpace(thumbnailUrl) && a.HasInlineDataImage)
+                {
+                    var migratedContent = await EnsureInlineImagesMigratedAsync(a.Id);
+                    contentForPreview = TrimContentForScan(migratedContent);
+                    thumbnailUrl = BuildThumbnailUrl(contentForPreview);
+                }
+
+                featured.Add(new
                 {
                     a.Id,
                     a.Title,
                     Content = string.Empty,
-                    ContentPreview = string.Empty,
-                    ThumbnailUrl = string.Empty,
+                    ContentPreview = BuildContentPreview(contentForPreview),
+                    ThumbnailUrl = thumbnailUrl,
                     a.CreatedAt,
                     a.PublishedAt,
                     a.ViewCount,
-                    CommentCount = a.Comments.Count(c => c.Status == "Approved"),
-                    Category = a.Category!.Name
-                })
-                .OrderByDescending(a => a.ViewCount)
-                .ThenByDescending(a => a.CommentCount)
-                .ThenByDescending(a => a.PublishedAt ?? a.CreatedAt)
-                .Take(take)
-                .ToListAsync();
+                    a.CommentCount,
+                    a.Category
+                });
+            }
+
+            _cache.Set(cacheKey, featured, FeaturedCacheDuration);
 
             return Ok(featured);
         }
@@ -212,9 +761,23 @@ namespace WardWebsite.API.Controllers
             if (!isModerator && article.Status != "Published")
                 return NotFound(new { message = "Article không tồn tại" });
 
+            var migratedInlineImages = await ConvertInlineDataImagesToStoredUrlsAsync(article.Content);
+            var shouldSave = false;
+
+            if (migratedInlineImages.Updated)
+            {
+                article.Content = migratedInlineImages.Content;
+                shouldSave = true;
+            }
+
             if (!isModerator && article.Status == "Published")
             {
                 article.ViewCount += 1;
+                shouldSave = true;
+            }
+
+            if (shouldSave)
+            {
                 await _context.SaveChangesAsync();
             }
 
@@ -248,6 +811,8 @@ namespace WardWebsite.API.Controllers
         public async Task<ActionResult<object>> Create(CreateArticleDto dto)
         {
             var sanitizedContent = SanitizeRichText(dto.Content);
+            var migratedContent = await ConvertInlineDataImagesToStoredUrlsAsync(sanitizedContent);
+            sanitizedContent = migratedContent.Content;
             var plainText = ExtractPlainText(sanitizedContent);
 
             // Validate
@@ -306,6 +871,8 @@ namespace WardWebsite.API.Controllers
                 return NotFound(new { message = "Article không tồn tại" });
 
             var sanitizedContent = SanitizeRichText(dto.Content);
+            var migratedContent = await ConvertInlineDataImagesToStoredUrlsAsync(sanitizedContent);
+            sanitizedContent = migratedContent.Content;
             var plainText = ExtractPlainText(sanitizedContent);
 
             // Validate

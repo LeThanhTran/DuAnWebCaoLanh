@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getMedia, getHomepageMedia, uploadMedia, deleteMedia, setHomepageVideo } from '../services/mediaService'
 
+const MISSING_MEDIA_PLACEHOLDER = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540"><rect width="960" height="540" fill="%23e2e8f0"/><text x="50%25" y="47%25" text-anchor="middle" fill="%23334155" font-family="Arial" font-size="26">Media khong ton tai tren may chu</text><text x="50%25" y="57%25" text-anchor="middle" fill="%2364758b" font-family="Arial" font-size="18">Vui long tai lai file</text></svg>'
+
 export default function Gallery({ user }) {
   const [media, setMedia] = useState([])
   const [activeTab, setActiveTab] = useState('all')
@@ -14,6 +16,7 @@ export default function Gallery({ user }) {
   const [deletingId, setDeletingId] = useState(null)
   const [previewImage, setPreviewImage] = useState(null)
   const [openMenuId, setOpenMenuId] = useState(null)
+  const [failedMediaMap, setFailedMediaMap] = useState({})
   const navigate = useNavigate()
 
   const canUpload = user?.role === 'Admin' || user?.role === 'Editor'
@@ -262,7 +265,10 @@ export default function Gallery({ user }) {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {mediaByTab.map(item => (
+        {mediaByTab.map(item => {
+          const isUnavailable = item.isAvailable === false || failedMediaMap[item.id]
+
+          return (
           <div
             key={item.id}
             className="group relative bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition fx-card-lift"
@@ -274,12 +280,19 @@ export default function Gallery({ user }) {
           >
             {isVideoItem(item) ? (
               <div className="relative block w-full bg-black">
-                <video
-                  src={item.url}
-                  controls
-                  preload="metadata"
-                  className="w-full h-64 object-cover"
-                />
+                {isUnavailable ? (
+                  <div className="w-full h-64 bg-slate-200 flex items-center justify-center px-4 text-center text-sm text-slate-700">
+                    Video khong ton tai tren may chu. Vui long tai lai.
+                  </div>
+                ) : (
+                  <video
+                    src={item.url}
+                    controls
+                    preload="metadata"
+                    className="w-full h-64 object-cover"
+                    onError={() => setFailedMediaMap(prev => ({ ...prev, [item.id]: true }))}
+                  />
+                )}
                 <div className="absolute top-2 left-2 text-xs text-white bg-purple-600/90 px-2 py-1 rounded-full">
                   Video
                 </div>
@@ -291,9 +304,10 @@ export default function Gallery({ user }) {
                 className="relative block w-full"
               >
                 <img
-                  src={item.url}
+                  src={isUnavailable ? MISSING_MEDIA_PLACEHOLDER : item.url}
                   alt={`Media ${item.id}`}
                   className="w-full h-64 object-cover transition duration-300 group-hover:scale-105"
+                  onError={() => setFailedMediaMap(prev => ({ ...prev, [item.id]: true }))}
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition" />
                 <div className="absolute bottom-2 left-2 text-xs text-white bg-black/55 px-2 py-1 rounded">
@@ -401,7 +415,8 @@ export default function Gallery({ user }) {
               </>
             )}
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {previewImage && (
@@ -419,10 +434,11 @@ export default function Gallery({ user }) {
           </button>
 
           <img
-            src={previewImage.url}
+            src={(previewImage.isAvailable === false || failedMediaMap[previewImage.id]) ? MISSING_MEDIA_PLACEHOLDER : previewImage.url}
             alt={`Xem ảnh ${previewImage.id}`}
             className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
             onClick={(e) => e.stopPropagation()}
+            onError={() => setFailedMediaMap(prev => ({ ...prev, [previewImage.id]: true }))}
           />
         </div>
       )}

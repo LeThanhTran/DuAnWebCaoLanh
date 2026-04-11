@@ -104,29 +104,6 @@ export default function LoginForm({ onLoginSuccess, loginSuccessOptions = {} }) 
     }
   }
 
-  const handleDemoLogin = async () => {
-    setError('')
-    try {
-      setLoading(true)
-      const response = await axios.post('/api/auth/login', {
-        username: 'demo',
-        password: '123456'
-      })
-      
-      if (response.data.success) {
-        localStorage.setItem('token', response.data.token)
-        localStorage.setItem('user', JSON.stringify(response.data.user))
-        syncRememberedCredentials('demo')
-        setForm(initialLoginForm)
-        onLoginSuccess(response.data.user, loginSuccessOptions)
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Lỗi đăng nhập Demo')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleForgotPasswordSubmit = async (event) => {
     event.preventDefault()
     setForgotError('')
@@ -275,14 +252,6 @@ export default function LoginForm({ onLoginSuccess, loginSuccessOptions = {} }) 
               {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
             </button>
 
-            <button
-              type="button"
-              onClick={handleDemoLogin}
-              disabled={loading}
-              className="auth-secondary-btn"
-            >
-              {loading ? 'Đang vào...' : 'Đăng nhập nhanh (Demo)'}
-            </button>
           </form>
         ) : (
           <form onSubmit={handleForgotPasswordSubmit} className="auth-form space-y-4">

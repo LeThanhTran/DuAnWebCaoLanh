@@ -18,7 +18,7 @@ namespace WardWebsite.API.Controllers
         }
 
         [HttpPost]
-        [AllowAnonymous]
+        [Authorize(Roles = "Admin,Editor,Viewer")]
         public async Task<IActionResult> Create([FromBody] CreateContactMessageDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.Name) ||

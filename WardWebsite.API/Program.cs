@@ -1,9 +1,11 @@
 using System.Text;
 using System.Threading.RateLimiting;
 using System.Net;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -18,12 +20,20 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
-        sqlOptions => sqlOptions.EnableRetryOnFailure()
+        sqlOptions =>
+        {
+            sqlOptions.CommandTimeout(60);
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 6,
+                maxRetryDelay: TimeSpan.FromSeconds(30),
+                errorNumbersToAdd: null);
+        }
     )
 );
 
 builder.Services.Configure<AvatarStorageOptions>(builder.Configuration.GetSection("AvatarStorage"));
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IAvatarStorageService, AvatarStorageService>();
 
 // Register repositories
@@ -138,6 +148,26 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+
+var defaultCulture = CultureInfo.InvariantCulture;
+CultureInfo.DefaultThreadCurrentCulture = defaultCulture;
+CultureInfo.DefaultThreadCurrentUICulture = defaultCulture;
+
+string ResolveUploadsRootPath()
+{
+    var homePath = Environment.GetEnvironmentVariable("HOME");
+    if (!string.IsNullOrWhiteSpace(homePath))
+    {
+        return Path.Combine(homePath, "site", "uploads");
+    }
+
+    return Path.Combine(builder.Environment.ContentRootPath, "App_Data", "uploads");
+}
+
+var uploadsRootPath = ResolveUploadsRootPath();
+Directory.CreateDirectory(Path.Combine(uploadsRootPath, "media"));
+Directory.CreateDirectory(Path.Combine(uploadsRootPath, "avatars"));
+Directory.CreateDirectory(Path.Combine(uploadsRootPath, "forms"));
 
 string ResolveSiteUrl(HttpContext context)
 {
@@ -332,92 +362,136 @@ if (enableSwagger)
     });
 }
 
+app.Use(async (context, next) =>
+{
+    CultureInfo.CurrentCulture = defaultCulture;
+    CultureInfo.CurrentUICulture = defaultCulture;
+
+    try
+    {
+        var acceptLanguage = context.Request.Headers.AcceptLanguage.ToString();
+        if (!string.IsNullOrWhiteSpace(acceptLanguage))
+        {
+            var requestedCultureName = acceptLanguage.Split(',')[0].Split(';')[0].Trim().Replace('_', '-');
+            var isCultureTokenValid = !string.IsNullOrWhiteSpace(requestedCultureName)
+                && requestedCultureName != "*"
+                && requestedCultureName.Length <= 32
+                && Regex.IsMatch(requestedCultureName, "^[a-zA-Z]{2,8}(?:-[a-zA-Z0-9]{1,8})*$");
+
+            if (isCultureTokenValid)
+            {
+                var requestCulture = CultureInfo.GetCultureInfo(requestedCultureName);
+                CultureInfo.CurrentCulture = requestCulture;
+                CultureInfo.CurrentUICulture = requestCulture;
+            }
+        }
+    }
+    catch (Exception)
+    {
+        CultureInfo.CurrentCulture = defaultCulture;
+        CultureInfo.CurrentUICulture = defaultCulture;
+    }
+
+    await next();
+});
+
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var startupLogger = scope.ServiceProvider
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("Startup");
 
-    // Ensure database exists and seed all roles and accounts
-    db.Database.Migrate();
-
-    // Create or get all roles
-    var adminRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "Admin");
-    if (adminRole == null)
+    try
     {
-        adminRole = new Role { Name = "Admin" };
-        db.Roles.Add(adminRole);
-    }
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    var editorRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "Editor");
-    if (editorRole == null)
-    {
-        editorRole = new Role { Name = "Editor" };
-        db.Roles.Add(editorRole);
-    }
+        // Ensure database exists and seed all roles and accounts.
+        db.Database.Migrate();
 
-    var viewerRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "Viewer");
-    if (viewerRole == null)
-    {
-        viewerRole = new Role { Name = "Viewer" };
-        db.Roles.Add(viewerRole);
-    }
-
-    await db.SaveChangesAsync();
-
-    var seedDefaultUsers = builder.Configuration.GetValue("Security:SeedDefaultUsers", builder.Environment.IsDevelopment());
-    if (seedDefaultUsers)
-    {
-        var defaultUsersSection = builder.Configuration.GetSection("Security:DefaultUsers");
-        var adminSeedPassword = defaultUsersSection["AdminPassword"] ?? "admin123";
-        var editorSeedPassword = defaultUsersSection["EditorPassword"] ?? "editor123";
-        var viewerSeedPassword = defaultUsersSection["ViewerPassword"] ?? "viewer123";
-
-        // Create missing default accounts, but never overwrite existing passwords.
-        var adminUser = await db.Users.FirstOrDefaultAsync(u => u.Username == "admin");
-        if (adminUser == null)
+        // Create or get all roles
+        var adminRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "Admin");
+        if (adminRole == null)
         {
-            db.Users.Add(new User
-            {
-                Username = "admin",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminSeedPassword),
-                RoleId = adminRole.Id
-            });
-        }
-        else if (adminUser.RoleId != adminRole.Id)
-        {
-            adminUser.RoleId = adminRole.Id;
+            adminRole = new Role { Name = "Admin" };
+            db.Roles.Add(adminRole);
         }
 
-        var editorUser = await db.Users.FirstOrDefaultAsync(u => u.Username == "editor");
-        if (editorUser == null)
+        var editorRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "Editor");
+        if (editorRole == null)
         {
-            db.Users.Add(new User
-            {
-                Username = "editor",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(editorSeedPassword),
-                RoleId = editorRole.Id
-            });
-        }
-        else if (editorUser.RoleId != editorRole.Id)
-        {
-            editorUser.RoleId = editorRole.Id;
+            editorRole = new Role { Name = "Editor" };
+            db.Roles.Add(editorRole);
         }
 
-        var viewerUser = await db.Users.FirstOrDefaultAsync(u => u.Username == "viewer");
-        if (viewerUser == null)
+        var viewerRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "Viewer");
+        if (viewerRole == null)
         {
-            db.Users.Add(new User
-            {
-                Username = "viewer",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(viewerSeedPassword),
-                RoleId = viewerRole.Id
-            });
-        }
-        else if (viewerUser.RoleId != viewerRole.Id)
-        {
-            viewerUser.RoleId = viewerRole.Id;
+            viewerRole = new Role { Name = "Viewer" };
+            db.Roles.Add(viewerRole);
         }
 
         await db.SaveChangesAsync();
+
+        var seedDefaultUsers = builder.Configuration.GetValue("Security:SeedDefaultUsers", builder.Environment.IsDevelopment());
+        if (seedDefaultUsers)
+        {
+            var defaultUsersSection = builder.Configuration.GetSection("Security:DefaultUsers");
+            var adminSeedPassword = defaultUsersSection["AdminPassword"] ?? "admin123";
+            var editorSeedPassword = defaultUsersSection["EditorPassword"] ?? "editor123";
+            var viewerSeedPassword = defaultUsersSection["ViewerPassword"] ?? "viewer123";
+
+            // Create missing default accounts, but never overwrite existing passwords.
+            var adminUser = await db.Users.FirstOrDefaultAsync(u => u.Username == "admin");
+            if (adminUser == null)
+            {
+                db.Users.Add(new User
+                {
+                    Username = "admin",
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminSeedPassword),
+                    RoleId = adminRole.Id
+                });
+            }
+            else if (adminUser.RoleId != adminRole.Id)
+            {
+                adminUser.RoleId = adminRole.Id;
+            }
+
+            var editorUser = await db.Users.FirstOrDefaultAsync(u => u.Username == "editor");
+            if (editorUser == null)
+            {
+                db.Users.Add(new User
+                {
+                    Username = "editor",
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(editorSeedPassword),
+                    RoleId = editorRole.Id
+                });
+            }
+            else if (editorUser.RoleId != editorRole.Id)
+            {
+                editorUser.RoleId = editorRole.Id;
+            }
+
+            var viewerUser = await db.Users.FirstOrDefaultAsync(u => u.Username == "viewer");
+            if (viewerUser == null)
+            {
+                db.Users.Add(new User
+                {
+                    Username = "viewer",
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(viewerSeedPassword),
+                    RoleId = viewerRole.Id
+                });
+            }
+            else if (viewerUser.RoleId != viewerRole.Id)
+            {
+                viewerUser.RoleId = viewerRole.Id;
+            }
+
+            await db.SaveChangesAsync();
+        }
+    }
+    catch (Exception ex)
+    {
+        startupLogger.LogError(ex, "Database initialization failed during startup. The application will continue running and retry DB operations per request.");
     }
 }
 
@@ -432,6 +506,11 @@ app.Use(async (context, next) =>
 
 app.UseCors("FrontendOnly");
 app.UseDefaultFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(uploadsRootPath),
+    RequestPath = "/uploads"
+});
 app.UseStaticFiles();
 app.UseRateLimiter();
 app.UseAuthentication();
